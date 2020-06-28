@@ -1,3 +1,4 @@
 *.png
 checksum.txt
 .DS_Store
+__pycache__
