@@ -88,7 +88,6 @@ generator_f = pix2pix.unet_generator(OUTPUT_CHANNELS, norm_type='instancenorm', 
 discriminator_x = pix2pix.discriminator(norm_type='instancenorm', target=False)
 discriminator_y = pix2pix.discriminator(norm_type='instancenorm', target=False)
 
-
 # setup network
 loss_obj = tf.keras.losses.BinaryCrossentropy(from_logits=True)
 
@@ -179,6 +178,9 @@ def train_step(real_x, real_y):
 	discriminator_y_optimizer.apply_gradients(zip(discriminator_y_gradients, discriminator_y.trainable_variables))
 
 
+	return total_gen_g_loss, total_gen_f_loss, disc_x_loss, disc_y_loss
+
+
 
 CHECKPOINT_PATH = "./checkpoints/train"
 
@@ -209,15 +211,18 @@ for epoch in range(EPOCHS):
 
 	n = 0
 	for image_x, image_y in tf.data.Dataset.zip((train_horses, train_zebras)):
-		train_step(image_x, image_y)
+		gen_g_loss, gen_f_loss, disc_x_loss, disc_y_loss = train_step(image_x, image_y)
 		if n % 10 == 0:
 			print ('.', end='')
 		n+=1
 
-	if (epoch + 1) % 5 == 0:
+	if epoch % 5 == 0:
 		ckpt_save_path = ckpt_manager.save()
 		print (f'Saving checkpoint for epoch {epoch+1} at {ckpt_save_path}')
 
+
+	print(f'Generator G Loss: {gen_g_loss}\nGenerator F Loss: {gen_f_loss}')
+	print(f'Discriminator X Loss: {disc_x_loss}\nDiscriminator Y Loss: {disc_y_loss}')
 	print (f'Time taken for epoch {epoch+1} is {time.time()-start} sec\n')
 
 
