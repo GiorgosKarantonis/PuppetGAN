@@ -75,29 +75,10 @@ test_zebras = test_zebras.map(	preprocess_image_test,
 
 
 
-CHECKPOINT_PATH = "./checkpoints/train"
+EPOCHS = 40
 
 puppet_GAN = ppt.PuppetGAN()
-
-# setup checkpoints' structure
-ckpt = tf.train.Checkpoint(	generator_g=puppet_GAN.generator_g,
-							generator_f=puppet_GAN.generator_f,
-							discriminator_x=puppet_GAN.discriminator_x,
-							discriminator_y=puppet_GAN.discriminator_y,
-							generator_g_optimizer=puppet_GAN.generator_g_optimizer,
-							generator_f_optimizer=puppet_GAN.generator_f_optimizer,
-							discriminator_x_optimizer=puppet_GAN.discriminator_x_optimizer,
-							discriminator_y_optimizer=puppet_GAN.discriminator_y_optimizer)
-
-ckpt_manager = tf.train.CheckpointManager(ckpt, CHECKPOINT_PATH, max_to_keep=5)
-
-# if a checkpoint exists, restore the latest checkpoint
-if ckpt_manager.latest_checkpoint:
-	ckpt.restore(ckpt_manager.latest_checkpoint)
-	print ('Latest checkpoint restored!')
-
-
-EPOCHS = 40
+puppet_GAN.restore_checkpoint()
 
 # train
 for epoch in range(EPOCHS):
@@ -108,7 +89,7 @@ for epoch in range(EPOCHS):
 		gen_g_loss, gen_f_loss, disc_x_loss, disc_y_loss = puppet_GAN.train_step(image_x, image_y)
 
 	if epoch % 5 == 0:
-		ckpt_save_path = ckpt_manager.save()
+		ckpt_save_path = puppet_GAN.ckpt_manager.save()
 		print (f'Saving checkpoint for epoch {epoch+1} at {ckpt_save_path}')
 
 

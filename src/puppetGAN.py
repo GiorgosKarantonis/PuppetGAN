@@ -39,6 +39,30 @@ class PuppetGAN:
 		self.discriminator_x_optimizer = tf.keras.optimizers.Adam(2e-4, beta_1=0.5)
 		self.discriminator_y_optimizer = tf.keras.optimizers.Adam(2e-4, beta_1=0.5)
 
+		self.generator_g_gradients = None
+		self.generator_f_gradients = None
+		self.discriminator_x_gradients = None
+		self.discriminator_y_gradients = None
+
+		self.checkpoint_path = "./checkpoints/train"
+
+		self.ckpt = tf.train.Checkpoint(	generator_g=self.generator_g,
+											generator_f=self.generator_f,
+											discriminator_x=self.discriminator_x,
+											discriminator_y=self.discriminator_y,
+											generator_g_optimizer=self.generator_g_optimizer,
+											generator_f_optimizer=self.generator_f_optimizer,
+											discriminator_x_optimizer=self.discriminator_x_optimizer,
+											discriminator_y_optimizer=self.discriminator_y_optimizer)
+
+		self.ckpt_manager = tf.train.CheckpointManager(self.ckpt, self.checkpoint_path, max_to_keep=5)
+
+
+	def restore_checkpoint(self):
+		if self.ckpt_manager.latest_checkpoint:
+			self.ckpt.restore(self.ckpt_manager.latest_checkpoint)
+			print ('Latest checkpoint restored!')
+
 
 	def create_generator(self, generator_type='pix2pix', **kwargs):
 		if generator_type == 'pix2pix':
