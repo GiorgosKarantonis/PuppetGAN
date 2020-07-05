@@ -1,6 +1,6 @@
 '''
-	Downloaded and modified from: 
-	https://github.com/tensorflow/examples/blob/d076aa360f3e5087a875351a79f7cbfddd09f525/tensorflow_examples/models/pix2pix/pix2pix.py
+	Adapted from:
+	https://github.com/tensorflow/examples/blob/master/tensorflow_examples/models/pix2pix/pix2pix.py
 '''
 
 import numpy as np
@@ -19,19 +19,15 @@ class InstanceNormalization(tf.keras.layers.Layer):
 
 
 	def build(self, input_shape):
-		self.scale = self.add_weight(
-				name='scale',
-				shape=input_shape[-1:],
-				initializer=tf.random_normal_initializer(1., 0.02),
-				trainable=True
-			)
+		self.scale = self.add_weight(	name='scale',
+										shape=input_shape[-1:],
+										initializer=tf.random_normal_initializer(1., 0.02),
+										trainable=True)
 
-		self.offset = self.add_weight(
-				name='offset',
-				shape=input_shape[-1:],
-				initializer='zeros',
-				trainable=True
-			)
+		self.offset = self.add_weight(	name='offset',
+										shape=input_shape[-1:], 
+										initializer='zeros',
+										trainable=True)
 
 
 	def call(self, x):
@@ -117,7 +113,7 @@ def upsample(filters, size, norm_type='batchnorm', apply_dropout=False):
 	return result
 
 
-def unet_generator(output_channels, norm_type='batchnorm', drop_skips=False, bottleneck=False, bottleneck_dim=128):
+def pix2pix_generator(img_height, img_width, output_channels, batch_size, norm_type='batchnorm', drop_skips=False, bottleneck=False):
 	'''
 		Modified u-net generator model (https://arxiv.org/abs/1611.07004).
 
@@ -158,8 +154,7 @@ def unet_generator(output_channels, norm_type='batchnorm', drop_skips=False, bot
 											activation='tanh')  # (bs, 256, 256, 3)
 
 
-	# TO DO: CHANGE IMG DIMS
-	inputs = tf.keras.layers.Input(shape=[256, 256, 3])
+	inputs = tf.keras.layers.Input(shape=[img_height, img_width, output_channels], batch_size=batch_size)
 	x = inputs
 
 	if drop_skips:
@@ -167,15 +162,21 @@ def unet_generator(output_channels, norm_type='batchnorm', drop_skips=False, bot
 		for down in encoder:
 			x = down(x)
 
-		# bottleneck
-		encoder_output_shape = x.get_shape().as_list()
-		x = tf.keras.layers.Flatten()(x)
-		assert bottleneck_dim % 2 == 0
-		x = tf.keras.layers.Dense(bottleneck_dim/2)(x)
-		# ADD CONCAT HERE
-		# TO DO: CHANGE IMG DIMS
-		x = tf.keras.layers.Dense(256*2)(x)
-		x = tf.reshape(x, [1, 1, 1, 512])
+		if bottleneck:
+			encoder_output_shape = x.get_shape().as_list()
+			
+			x = tf.keras.layers.Flatten()(x)
+			x = tf.keras.layers.Dense(bottleneck)(x)
+			
+			attr, rest = tf.split(x, 2, axis=1)
+			
+			attr = tf.keras.layers.Dense(64)(attr)
+			rest = tf.keras.layers.Dense(64)(rest)
+			
+			x = tf.keras.layers.concatenate([attr, rest])
+			x = tf.keras.layers.Dense(np.prod(encoder_output_shape))(x)
+
+			x = tf.reshape(x, encoder_output_shape)
 
 		# Upsampling
 		for up in decoder:
@@ -196,14 +197,14 @@ def unet_generator(output_channels, norm_type='batchnorm', drop_skips=False, bot
 		# Upsampling and establishing the skip connections
 		for up, skip in zip(decoder, skips):
 			x = up(x)
-			x = tf.keras.layers.Concatenate([x, skip])
+			x = tf.keras.layers.concatenate([x, skip])
 
 	x = last(x)
 
 	return tf.keras.Model(inputs=inputs, outputs=x)
 
 
-def discriminator(norm_type='batchnorm', target=True):
+def pix2pix_discriminator(norm_type='batchnorm', target=True):
 	'''
 		PatchGan discriminator model (https://arxiv.org/abs/1611.07004).
 
@@ -253,4 +254,6 @@ def discriminator(norm_type='batchnorm', target=True):
 		return tf.keras.Model(inputs=[inp, tar], outputs=last)
 	else:
 		return tf.keras.Model(inputs=inp, outputs=last)
+
+
 

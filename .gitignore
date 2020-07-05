@@ -2,3 +2,5 @@
 checksum.txt
 .DS_Store
 __pycache__
+_archive
+*.sh
