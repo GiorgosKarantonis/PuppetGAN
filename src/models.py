@@ -9,10 +9,6 @@ import tensorflow as tf
 
 
 class InstanceNormalization(tf.keras.layers.Layer):
-	'''
-		Instance Normalization Layer (https://arxiv.org/abs/1607.08022).
-	'''
-
 	def __init__(self, epsilon=1e-5):
 		super(InstanceNormalization, self).__init__()
 		self.epsilon = epsilon
@@ -40,20 +36,6 @@ class InstanceNormalization(tf.keras.layers.Layer):
 
 
 def downsample(filters, size, norm_type='batchnorm', apply_norm=True):
-	'''
-		Downsamples an input.
-		Conv2D => Batchnorm => LeakyRelu
-		
-		Args:
-			filters: number of filters
-			size: filter size
-			norm_type: Normalization type; either 'batchnorm' or 'instancenorm'.
-			apply_norm: If True, adds the batchnorm layer
-		
-		Returns:
-			Downsample Sequential Model
-	'''
-
 	initializer = tf.random_normal_initializer(0., 0.02)
 
 	result = tf.keras.Sequential()
@@ -76,20 +58,6 @@ def downsample(filters, size, norm_type='batchnorm', apply_norm=True):
 
 
 def upsample(filters, size, norm_type='batchnorm', apply_dropout=False):
-	'''
-		Upsamples an input.
-		Conv2DTranspose -> Batchnorm -> Dropout -> Relu
-
-		Args:
-			filters: number of filters
-			size: filter size
-			norm_type: Normalization type; either 'batchnorm' or 'instancenorm'.
-			apply_dropout: If True, adds the dropout layer
-		
-		Returns:
-			Upsample Sequential Model
-	'''
-
 	initializer = tf.random_normal_initializer(0., 0.02)
 
 	result = tf.keras.Sequential()
@@ -113,93 +81,74 @@ def upsample(filters, size, norm_type='batchnorm', apply_dropout=False):
 	return result
 
 
-def pix2pix_generator(img_height, img_width, output_channels, batch_size, norm_type='batchnorm', drop_skips=False, bottleneck=False):
-	'''
-		Modified u-net generator model (https://arxiv.org/abs/1611.07004).
+def bottleneck(dim=128):
+	assert dim % 2 == 0
 
-		Args:
-			output_channels: Output channels
-			norm_type: Type of normalization. Either 'batchnorm' or 'instancenorm'.
-		
-		Returns:
-			Generator model
-	'''
+	result = tf.keras.Sequential()
+	result.add(tf.keras.layers.Flatten())
+	result.add(tf.keras.layers.Dense(dim))
 
-	encoder = [
-			downsample(64, 4, norm_type, apply_norm=False),  # (bs, 128, 128, 64)
-			downsample(128, 4, norm_type),  # (bs, 64, 64, 128)
-			downsample(256, 4, norm_type),  # (bs, 32, 32, 256)
-			downsample(512, 4, norm_type),  # (bs, 16, 16, 512)
-			downsample(512, 4, norm_type),  # (bs, 8, 8, 512)
-			downsample(512, 4, norm_type),  # (bs, 4, 4, 512)
-			downsample(512, 4, norm_type),  # (bs, 2, 2, 512)
-			downsample(512, 4, norm_type),  # (bs, 1, 1, 512)
-	]
+	return result
 
-	decoder = [
-			upsample(512, 4, norm_type, apply_dropout=True),  # (bs, 2, 2, 1024)
-			upsample(512, 4, norm_type, apply_dropout=True),  # (bs, 4, 4, 1024)
-			upsample(512, 4, norm_type, apply_dropout=True),  # (bs, 8, 8, 1024)
-			upsample(512, 4, norm_type),  # (bs, 16, 16, 1024)
-			upsample(256, 4, norm_type),  # (bs, 32, 32, 512)
-			upsample(128, 4, norm_type),  # (bs, 64, 64, 256)
-			upsample(64, 4, norm_type),  # (bs, 128, 128, 128)
-	]
 
-	last = tf.keras.layers.Conv2DTranspose( output_channels, 
+def generator(	img_height, 
+				img_width, 
+				encoder, 
+				decoder, 
+				output_channels, 
+				batch_size, 
+				norm_type='batchnorm', 
+				combine_inputs=False):
+	
+	inputs = tf.keras.layers.Input(shape=[img_height, img_width, output_channels], batch_size=batch_size)
+	x = inputs
+
+	if combine_inputs:
+		inputs_2 = tf.keras.layers.Input(shape=[img_height, img_width, output_channels], batch_size=batch_size)
+		x2 = inputs_2
+
+		assert x.get_shape().as_list() == x2.get_shape().as_list()
+
+	encoder_, bottleneck_ = encoder
+	
+	# Downsampling
+	if not combine_inputs:
+		for down in encoder_:
+			x = down(x)
+	else:
+		for down in encoder_:
+			x = down(x)
+			x2 = down(x2)
+
+	if bottleneck_:
+		encoder_output_shape = x.get_shape().as_list()
+
+		if not combine_inputs:
+			x = bottleneck_(x)
+			attr, rest = tf.split(x, 2, axis=1)
+		else:
+			x = bottleneck_(x)
+			_, rest = tf.split(x, 2, axis=1)
+
+			x2 = bottleneck_(x2)
+			attr, _ = tf.split(x2, 2, axis=1)
+
+		# ADAPT THIS TO THE VARIOUS ATTR, REST
+		x = tf.keras.layers.concatenate([attr, rest])
+		x = tf.keras.layers.Dense(np.prod(encoder_output_shape))(x)
+
+		x = tf.reshape(x, encoder_output_shape)
+
+	# Upsampling
+	for up in decoder:
+		x = up(x)
+
+	x = tf.keras.layers.Conv2DTranspose(	output_channels, 
 											4, 
 											strides=2,
 											padding='same', 
 											kernel_initializer=tf.random_normal_initializer(0., 0.02),
-											activation='tanh')  # (bs, 256, 256, 3)
-
-
-	inputs = tf.keras.layers.Input(shape=[img_height, img_width, output_channels], batch_size=batch_size)
-	x = inputs
-
-	if drop_skips:
-		# Downsampling through the model
-		for down in encoder:
-			x = down(x)
-
-		if bottleneck:
-			encoder_output_shape = x.get_shape().as_list()
-			
-			x = tf.keras.layers.Flatten()(x)
-			x = tf.keras.layers.Dense(bottleneck)(x)
-			
-			attr, rest = tf.split(x, 2, axis=1)
-			
-			attr = tf.keras.layers.Dense(64)(attr)
-			rest = tf.keras.layers.Dense(64)(rest)
-			
-			x = tf.keras.layers.concatenate([attr, rest])
-			x = tf.keras.layers.Dense(np.prod(encoder_output_shape))(x)
-
-			x = tf.reshape(x, encoder_output_shape)
-
-		# Upsampling
-		for up in decoder:
-			x = up(x)
-	else:
-		# Downsampling through the model
-		skips = []
-
-		for down in encoder:
-			x = down(x)
-			skips.append(x)
-
-		# latter downsampling layers connect to earlier upsampling layers
-		skips = reversed(skips[:-1])
-
-		# ADD BOTTLENECK HERE
-
-		# Upsampling and establishing the skip connections
-		for up, skip in zip(decoder, skips):
-			x = up(x)
-			x = tf.keras.layers.concatenate([x, skip])
-
-	x = last(x)
+											activation='tanh')(x)  # (bs, 256, 256, 3)
 
 	return tf.keras.Model(inputs=inputs, outputs=x)
 
@@ -207,13 +156,6 @@ def pix2pix_generator(img_height, img_width, output_channels, batch_size, norm_t
 def pix2pix_discriminator(norm_type='batchnorm', target=True):
 	'''
 		PatchGan discriminator model (https://arxiv.org/abs/1611.07004).
-
-		Args:
-			norm_type: Type of normalization. Either 'batchnorm' or 'instancenorm'.
-			target: Bool, indicating whether target image is an input or not.
-		
-		Returns:
-			Discriminator model
 	'''
 
 	initializer = tf.random_normal_initializer(0., 0.02)

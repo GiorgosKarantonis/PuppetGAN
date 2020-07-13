@@ -1,101 +1,84 @@
-'''
-	Apapted from: 
-	https://github.com/tensorflow/docs/blob/master/site/en/tutorials/generative/cyclegan.ipynb
-'''
-
 import time
 
 import tensorflow as tf
-import tensorflow_datasets as tfds
-
-import puppetGAN as ppt
+import puppetGAN as puppet
 
 
 
-tfds.disable_progress_bar()
-AUTOTUNE = tf.data.experimental.AUTOTUNE
+FACES_REAL_PATH = 'data/dummy/real'
+FACES_SYNTH_PATH = 'data/dummy/synth'
 
-dataset, metadata = tfds.load('cycle_gan/horse2zebra', with_info=True, as_supervised=True)
-
-train_horses, train_zebras = dataset['trainA'], dataset['trainB']
-test_horses, test_zebras = dataset['testA'], dataset['testB']
-
-BUFFER_SIZE = 1000
-
-
-
-def random_crop(image):
-	cropped_image = tf.image.random_crop(image, size=[256, 256, 3])
-
-	return cropped_image
-
-
-def normalize(image):
-	# normalizing the images to [-1, 1]
-	image = tf.cast(image, tf.float32)
-	image = (image / 127.5) - 1
-	return image
-
-
-def random_jitter(image):
-	# resizing to 286 x 286 x 3
-	image = tf.image.resize(image, [286, 286], method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
-
-	# randomly cropping to 256 x 256 x 3
-	image = random_crop(image)
-
-	# random mirroring
-	image = tf.image.random_flip_left_right(image)
-
-	return image
-
-
-def preprocess_image_train(image, label):
-	image = random_jitter(image)
-	image = normalize(image)
-	
-	return image
-
-
-def preprocess_image_test(image, label):
-	return normalize(image)
-
-
-
-# prepare datasets
-train_horses = train_horses.map(	preprocess_image_train, 
-									num_parallel_calls=AUTOTUNE).cache().shuffle(BUFFER_SIZE).batch(1)
-train_zebras = train_zebras.map(	preprocess_image_train, 
-									num_parallel_calls=AUTOTUNE).cache().shuffle(BUFFER_SIZE).batch(1)
-
-test_horses = test_horses.map(	preprocess_image_test, 
-								num_parallel_calls=AUTOTUNE).cache().shuffle(BUFFER_SIZE).batch(1)
-test_zebras = test_zebras.map(	preprocess_image_test, 
-								num_parallel_calls=AUTOTUNE).cache().shuffle(BUFFER_SIZE).batch(1)
-
-
+IMG_SIZE = (128, 128)
+BATCH_SIZE = 1
 
 EPOCHS = 40
 
-puppet_GAN = ppt.PuppetGAN()
+
+
+def normalize(img):
+	'''
+		Normalizing the images to [-1, 1]. 
+	'''
+	img = tf.cast(img, tf.float32)
+	img = (img / 127.5) - 1
+	
+	return img
+
+
+def split_to_attributes(img):
+	img_np = np.array(Image.open(img))
+
+	h_window = int(img_np.shape[0] / 3)
+	w_window = int(img_np.shape[1] / 3)
+
+	rest = Image.fromarray(img_np[:h_window, :w_window, :]).convert('RGB')
+	attr = Image.fromarray(img_np[h_window:2*h_window, :w_window, :]).convert('RGB')
+	both = Image.fromarray(img_np[2*h_window:, :w_window:, :]).convert('RGB')
+
+	return attr, rest, both
+
+
+
+train_real = tf.keras.preprocessing.image_dataset_from_directory(	FACES_REAL_PATH, 
+																	validation_split=0, 
+																	subset="training_real", 
+																	seed=123, 
+																	image_size=IMG_SIZE, 
+																	batch_size=BATCH_SIZE)
+
+train_synth = tf.keras.preprocessing.image_dataset_from_directory(	FACES_REAL_PATH, 
+																	validation_split=0, 
+																	subset="training_synth", 
+																	seed=123, 
+																	image_size=IMG_SIZE, 
+																	batch_size=BATCH_SIZE)
+
+
+puppet_GAN = puppet.PuppetGAN(img_size=IMG_SIZE, batch_size=BATCH_SIZE)
 puppet_GAN.restore_checkpoint()
+
 
 # train
 for epoch in range(EPOCHS):
 	print(f'{epoch+1} / {EPOCHS}')
 	start = time.time()
+	
+	for a, b in zip((train_real, train_synth)):
 
-	for image_x, image_y in tf.data.Dataset.zip((train_horses, train_zebras)):
-		gen_g_loss, gen_f_loss, disc_x_loss, disc_y_loss = puppet_GAN.train_step(image_x, image_y)
+		a = normalize(a)
+		b = normalize(b)
 
-	if epoch % 5 == 0:
-		ckpt_save_path = puppet_GAN.ckpt_manager.save()
-		print (f'Saving checkpoint for epoch {epoch+1} at {ckpt_save_path}')
+		b1, b2, b3 = split_to_attributes(b)
 
+		reconstruction_loss, disentanglement_loss, cycle_loss, attr_cycle_loss = puppet_GAN.train_step(a, b1, b2, b3)
 
-	print(f'Generator G Loss: {gen_g_loss}\nGenerator F Loss: {gen_f_loss}')
-	print(f'Discriminator X Loss: {disc_x_loss}\nDiscriminator Y Loss: {disc_y_loss}')
-	print (f'Time taken for epoch {epoch+1} is {time.time()-start} sec\n')
+	# if epoch % 5 == 0:
+	# 	ckpt_path = puppet_GAN.ckpt_manager.save()
+	# 	print(f'Saving checkpoint for epoch {epoch+1} at {ckpt_path}')
+
+	print(f'{reconstruction_loss}\n{disentanglement_loss}\n{cycle_loss}\n{attr_cycle_loss}\n')
+	print(f'Time taken for epoch {epoch+1}: {time.time()-start} sec. \n')
+
 
 
 
