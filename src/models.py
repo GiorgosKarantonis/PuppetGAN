@@ -87,6 +87,7 @@ def bottleneck(dim=128):
     result = tf.keras.Sequential()
     result.add(tf.keras.layers.Flatten())
     result.add(tf.keras.layers.Dense(dim))
+    result.add(tf.keras.layers.GaussianNoise(stddev=1))
 
     return result
 
@@ -100,12 +101,34 @@ def generator(  img_height,
                 norm_type='batchnorm', 
                 combine_inputs=False):
     
-    inputs = tf.keras.layers.Input(shape=[img_height, img_width, output_channels], batch_size=batch_size)
-    x = inputs
 
-    if combine_inputs:
-        inputs_2 = tf.keras.layers.Input(shape=[img_height, img_width, output_channels], batch_size=batch_size)
-        x2 = inputs_2
+    if not combine_inputs:
+        try:
+            inputs = tf.keras.layers.Input(shape=[128, 128, output_channels], batch_size=batch_size)
+        except:
+            try:
+                tf.keras.layers.Input(shape=[3*128, 128, output_channels], batch_size=batch_size)
+            except:
+                raise
+
+        x = inputs
+    else:
+        try:
+            inputs = tf.keras.layers.Input(shape=[2*128, 2*128, output_channels], batch_size=batch_size)
+        except:
+            try:
+                tf.keras.layers.Input(shape=[2*3*128, 2*128, output_channels], batch_size=batch_size)
+            except:
+                raise
+
+        print()
+        print()
+        print()
+        print(x.shape)
+        print(x2.shape)
+        print()
+        print()
+        print()
 
         assert x.get_shape().as_list() == x2.get_shape().as_list()
 

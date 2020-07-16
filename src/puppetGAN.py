@@ -25,7 +25,7 @@ class PuppetGAN:
         self.lamda = lamda
 
         # self.gan_loss = tf.keras.losses.BinaryCrossentropy(from_logits=True)
-        self.gan_loss = tf.keras.losses.MSE()
+        self.gan_loss = tf.keras.losses.MSE
 
         self.encoder = self.init_encoder()
         self.decoder_real = self.init_decoder()
@@ -181,60 +181,92 @@ class PuppetGAN:
         return weight * tf.norm((real - generated), ord=p)
 
 
+    def make_noisy(img, mean=0., stddev=1., dtype=tf.dtypes.float32, seed=None, name=None):
+        noise = tf.random.normal(   img.shape, 
+                            mean=mean, 
+                            stddev=stddev, 
+                            dtype=dtype, 
+                            seed=seed, 
+                            name=name)
+
+        return img + noise
+
+
     @tf.function
-    def train_step_test(self, a, b1, b2, b3):
-        b = tf.keras.layers.concatenate([b1, b2, b3])
+    def train_step(self, a, b1, b2, b3):
+        # b = tf.keras.layers.concatenate([b1, b2, b3])
 
         with tf.GradientTape(persistent=True) as tape:
             # persistent=True because the tape is used more than once to calculate the gradients
 
             # Reconstruction Loss
             a_hat = self.gen_dec_r(a, training=True)
-            b_hat = self.gen_dec_s(b, training=True)
+            b1_hat = self.gen_dec_s(b1, training=True)
+            b2_hat = self.gen_dec_s(b2, training=True)
+            b3_hat = self.gen_dec_s(b3, training=True)
 
-            reconstruction_loss_a = l_p_loss(a, a_hat, p=1)
-            reconstruction_loss_b = l_p_loss(b, b_hat, p=1)
+            reconstruction_loss_a = self.l_p_loss(a, a_hat, p=1)
+            reconstruction_loss_b1 = self.l_p_loss(b1, b1_hat, p=1)
+            reconstruction_loss_b2 = self.l_p_loss(b2, b2_hat, p=1)
+            reconstruction_loss_b3 = self.l_p_loss(b3, b3_hat, p=1)
             
-            total_reconstruction_loss = reconstruction_loss_a + reconstruction_loss_b
+            total_reconstruction_loss = reconstruction_loss_a       \
+                                        + reconstruction_loss_b1    \
+                                        + reconstruction_loss_b2    \
+                                        + reconstruction_loss_b3    \
 
 
             # Dissentaglement Loss
-            b3_hat = self.gen_comb_dec_s(b2, b1, training=True)
+            b3_hat = self.gen_comb_dec_s([b2, b1], training=True)
 
-            disentanglement_loss_b3 = l_p_loss(b3, b3_hat, p=1)
+            disentanglement_loss_b3 = self.l_p_loss(b3, b3_hat, p=1)
             
             total_disentanglement_loss = disentanglement_loss_b3
 
 
             # Cycle Loss
             b_cycled_tilde = self.gen_dec_s(a, training=True)
+            b_cycled_tilde = make_noisy(b_cycled_tilde)
             a_cycled_hat = self.gen_dec_r(b_cycled_tilde, training=True)
 
-            a_cycled_tilde = self.gen_dec_r(b, training=True)
-            b_cycled_hat = self.gen_dec_s(a_cycled_tilde, training=True)
+            a1_cycled_tilde = self.gen_dec_r(b1, training=True)
+            a1_cycled_tilde = make_noisy(a1_cycled_tilde)
+            b1_cycled_hat = self.gen_dec_s(a1_cycled_tilde, training=True)
+
+            a2_cycled_tilde = self.gen_dec_r(b2, training=True)
+            a2_cycled_tilde = make_noisy(a2_cycled_tilde)
+            b2_cycled_hat = self.gen_dec_s(a2_cycled_tilde, training=True)
+
+            a3_cycled_tilde = self.gen_dec_r(b3, training=True)
+            a3_cycled_tilde = make_noisy(a3_cycled_tilde)
+            b3_cycled_hat = self.gen_dec_s(a3_cycled_tilde, training=True)
 
             cycle_loss_a = self.l_p_loss(a, a_cycled_hat, p=1)
-            cycle_loss_b = self.l_p_loss(b, b_cycled_hat, p=1)
+            cycle_loss_b1 = self.l_p_loss(b1, b1_cycled_hat, p=1)
+            cycle_loss_b2 = self.l_p_loss(b2, b2_cycled_hat, p=1)
+            cycle_loss_b3 = self.l_p_loss(b3, b3_cycled_hat, p=1)
             
-            total_cycle_loss = cycle_loss_a + cycle_loss_b
+            total_cycle_loss = cycle_loss_a + cycle_loss_b1 + cycle_loss_b2 + cycle_loss_b3
 
 
             # Attribute Cycle Loss
-            a_tilde = self.gen_comb_dec_r(a, b1, training=True)
-            b3_hat_star = self.gen_comb_dec_s(b2, a_tilde, training=True)
+            a_tilde = self.gen_comb_dec_r([a, b1], training=True)
+            a_tilde = make_noisy(a_tilde)
+            b3_hat_star = self.gen_comb_dec_s([b2, a_tilde], training=True)
 
-            b_tilde = self.gen_comb_dec_s(b1, a, training=True)
-            a_hat_star = self.gen_comb_dec_r(a, b_tilde, training=True)
+            b_tilde = self.gen_comb_dec_s([b1, a], training=True)
+            b_tilde = make_noisy(b_tilde)
+            a_hat_star = self.gen_comb_dec_r([a, b_tilde], training=True)
 
-            attr_cycle_loss_b3 = l_p_loss(b3, b3_hat_star, p=1)
-            attr_cycle_loss_a = l_p_loss(a, a_hat_star, p=1)
+            attr_cycle_loss_b3 = self.l_p_loss(b3, b3_hat_star, p=1)
+            attr_cycle_loss_a = self.l_p_loss(a, a_hat_star, p=1)
             
             total_attr_cycle_loss = attr_cycle_loss_b3 + attr_cycle_loss_a
 
 
             # Supervised Losses per Generator
             total_gen_dec_r_loss = reconstruction_loss_a + total_cycle_loss
-            total_gen_dec_s_loss = reconstruction_loss_b + total_cycle_loss
+            total_gen_dec_s_loss = reconstruction_loss_b1 + reconstruction_loss_b2 + reconstruction_loss_b3 + total_cycle_loss
             total_gen_comb_dec_r_loss = total_attr_cycle_loss
             total_gen_comb_dec_s_loss = total_disentanglement_loss + total_attr_cycle_loss
 
@@ -253,7 +285,8 @@ class PuppetGAN:
         self.gen_comb_dec_s_opt.apply_gradients(zip(self.gen_comb_dec_s_grads, self.gen_comb_dec_s.trainable_variables))
 
 
-        return total_reconstruction_loss, total_disentanglement_loss, total_cycle_loss, total_attr_cycle_loss
+        # return total_reconstruction_loss, total_disentanglement_loss, total_cycle_loss, total_attr_cycle_loss
+        return None, None, None, None
 
 
     @tf.function
