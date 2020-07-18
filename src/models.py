@@ -85,7 +85,7 @@ def bottleneck(dim=128):
     assert dim % 2 == 0
 
     result = tf.keras.Sequential()
-    result.add(tf.keras.layers.Flatten())
+    result.add(tf.keras.layers.Flatten('channels_last'))
     result.add(tf.keras.layers.Dense(dim))
     result.add(tf.keras.layers.GaussianNoise(stddev=1))
 
@@ -103,32 +103,15 @@ def generator(  img_height,
     
 
     if not combine_inputs:
-        try:
-            inputs = tf.keras.layers.Input(shape=[128, 128, output_channels], batch_size=batch_size)
-        except:
-            try:
-                tf.keras.layers.Input(shape=[3*128, 128, output_channels], batch_size=batch_size)
-            except:
-                raise
+        inputs = tf.keras.layers.Input(shape=[128, 128, output_channels], batch_size=batch_size)
 
         x = inputs
     else:
-        try:
-            inputs = tf.keras.layers.Input(shape=[2*128, 2*128, output_channels], batch_size=batch_size)
-        except:
-            try:
-                tf.keras.layers.Input(shape=[2*3*128, 2*128, output_channels], batch_size=batch_size)
-            except:
-                raise
+        inputs = tf.keras.layers.Input(shape=[2*128, 128, output_channels], batch_size=batch_size)
 
-        print()
-        print()
-        print()
-        print(x.shape)
-        print(x2.shape)
-        print()
-        print()
-        print()
+        x = inputs[:128, :, :]
+        x2 = inputs[128:, :, :]
+
 
         assert x.get_shape().as_list() == x2.get_shape().as_list()
 
@@ -145,6 +128,7 @@ def generator(  img_height,
 
     if bottleneck_:
         encoder_output_shape = x.get_shape().as_list()
+        encoder_output_shape_no_bs = encoder_output_shape[1:]  # don't include batch size
 
         if not combine_inputs:
             x = bottleneck_(x)
@@ -158,7 +142,7 @@ def generator(  img_height,
 
         # ADAPT THIS TO THE VARIOUS ATTR, REST
         x = tf.keras.layers.concatenate([attr, rest])
-        x = tf.keras.layers.Dense(np.prod(encoder_output_shape))(x)
+        x = tf.keras.layers.Dense(np.prod(encoder_output_shape_no_bs))(x)
 
         x = tf.reshape(x, encoder_output_shape)
 

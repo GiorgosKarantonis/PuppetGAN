@@ -181,13 +181,13 @@ class PuppetGAN:
         return weight * tf.norm((real - generated), ord=p)
 
 
-    def make_noisy(img, mean=0., stddev=1., dtype=tf.dtypes.float32, seed=None, name=None):
+    def make_noisy(self, img, mean=0., stddev=1., dtype=tf.dtypes.float32, seed=None, name=None):
         noise = tf.random.normal(   img.shape, 
-                            mean=mean, 
-                            stddev=stddev, 
-                            dtype=dtype, 
-                            seed=seed, 
-                            name=name)
+                                    mean=mean, 
+                                    stddev=stddev, 
+                                    dtype=dtype, 
+                                    seed=seed, 
+                                    name=name)
 
         return img + noise
 
@@ -199,7 +199,7 @@ class PuppetGAN:
         with tf.GradientTape(persistent=True) as tape:
             # persistent=True because the tape is used more than once to calculate the gradients
 
-            # Reconstruction Loss
+            # Reconstruction Loss            
             a_hat = self.gen_dec_r(a, training=True)
             b1_hat = self.gen_dec_s(b1, training=True)
             b2_hat = self.gen_dec_s(b2, training=True)
@@ -226,19 +226,19 @@ class PuppetGAN:
 
             # Cycle Loss
             b_cycled_tilde = self.gen_dec_s(a, training=True)
-            b_cycled_tilde = make_noisy(b_cycled_tilde)
+            b_cycled_tilde = self.make_noisy(b_cycled_tilde)
             a_cycled_hat = self.gen_dec_r(b_cycled_tilde, training=True)
 
             a1_cycled_tilde = self.gen_dec_r(b1, training=True)
-            a1_cycled_tilde = make_noisy(a1_cycled_tilde)
+            a1_cycled_tilde = self.make_noisy(a1_cycled_tilde)
             b1_cycled_hat = self.gen_dec_s(a1_cycled_tilde, training=True)
 
             a2_cycled_tilde = self.gen_dec_r(b2, training=True)
-            a2_cycled_tilde = make_noisy(a2_cycled_tilde)
+            a2_cycled_tilde = self.make_noisy(a2_cycled_tilde)
             b2_cycled_hat = self.gen_dec_s(a2_cycled_tilde, training=True)
 
             a3_cycled_tilde = self.gen_dec_r(b3, training=True)
-            a3_cycled_tilde = make_noisy(a3_cycled_tilde)
+            a3_cycled_tilde = self.make_noisy(a3_cycled_tilde)
             b3_cycled_hat = self.gen_dec_s(a3_cycled_tilde, training=True)
 
             cycle_loss_a = self.l_p_loss(a, a_cycled_hat, p=1)
@@ -251,11 +251,11 @@ class PuppetGAN:
 
             # Attribute Cycle Loss
             a_tilde = self.gen_comb_dec_r([a, b1], training=True)
-            a_tilde = make_noisy(a_tilde)
+            a_tilde = self.make_noisy(a_tilde)
             b3_hat_star = self.gen_comb_dec_s([b2, a_tilde], training=True)
 
             b_tilde = self.gen_comb_dec_s([b1, a], training=True)
-            b_tilde = make_noisy(b_tilde)
+            b_tilde = self.make_noisy(b_tilde)
             a_hat_star = self.gen_comb_dec_r([a, b_tilde], training=True)
 
             attr_cycle_loss_b3 = self.l_p_loss(b3, b3_hat_star, p=1)
@@ -277,7 +277,6 @@ class PuppetGAN:
         self.gen_comb_dec_r_grads = tape.gradient(total_gen_comb_dec_r_loss, self.gen_comb_dec_r.trainable_variables)
         self.gen_comb_dec_s_grads = tape.gradient(total_gen_comb_dec_s_loss, self.gen_comb_dec_s.trainable_variables)
 
-
         # Apply the Gradients to the Optimizers
         self.gen_dec_r_opt.apply_gradients(zip(self.gen_dec_r_grads, self.gen_dec_r.trainable_variables))
         self.gen_dec_s_opt.apply_gradients(zip(self.gen_dec_s_grads, self.gen_dec_s.trainable_variables))
@@ -285,65 +284,7 @@ class PuppetGAN:
         self.gen_comb_dec_s_opt.apply_gradients(zip(self.gen_comb_dec_s_grads, self.gen_comb_dec_s.trainable_variables))
 
 
-        # return total_reconstruction_loss, total_disentanglement_loss, total_cycle_loss, total_attr_cycle_loss
-        return None, None, None, None
-
-
-    @tf.function
-    def train_step_old(self, real_x, real_y):
-        # persistent is set to True because the tape is used more than
-        # once to calculate the gradients.
-        with tf.GradientTape(persistent=True) as tape:
-            # Generator G translates X -> Y
-            # Generator F translates Y -> X.
-            
-            fake_y = self.generator_g(real_x, training=True)
-            cycled_x = self.generator_f(fake_y, training=True)
-
-            fake_x = self.generator_f(real_y, training=True)
-            cycled_y = self.generator_g(fake_x, training=True)
-
-            # same_x and same_y are used for identity loss.
-            same_x = self.generator_f(real_x, training=True)
-            same_y = self.generator_g(real_y, training=True)
-
-            disc_real_x = self.discriminator_x(real_x, training=True)
-            disc_real_y = self.discriminator_y(real_y, training=True)
-
-            disc_fake_x = self.discriminator_x(fake_x, training=True)
-            disc_fake_y = self.discriminator_y(fake_y, training=True)
-
-            # calculate the loss
-            gen_g_loss = self.generator_loss(disc_fake_y)
-            gen_f_loss = self.generator_loss(disc_fake_x)
-            
-            total_cycle_loss = self.cycle_loss(real_x, cycled_x) + self.cycle_loss(real_y, cycled_y)
-            
-            # Total generator loss = adversarial loss + cycle loss
-            total_gen_g_loss = gen_g_loss + total_cycle_loss + self.identity_loss(real_y, same_y)
-            total_gen_f_loss = gen_f_loss + total_cycle_loss + self.identity_loss(real_x, same_x)
-
-            disc_x_loss = self.discriminator_loss(disc_real_x, disc_fake_x)
-            disc_y_loss = self.discriminator_loss(disc_real_y, disc_fake_y)
-        
-
-        # Calculate the gradients for generator and discriminator
-        self.generator_g_gradients = tape.gradient(total_gen_g_loss, self.generator_g.trainable_variables)
-        self.generator_f_gradients = tape.gradient(total_gen_f_loss, self.generator_f.trainable_variables)
-        
-        self.discriminator_x_gradients = tape.gradient(disc_x_loss, self.discriminator_x.trainable_variables)
-        self.discriminator_y_gradients = tape.gradient(disc_y_loss, self.discriminator_y.trainable_variables)
-        
-
-        # Apply the gradients to the optimizers
-        self.generator_g_optimizer.apply_gradients(zip(self.generator_g_gradients, self.generator_g.trainable_variables))
-        self.generator_f_optimizer.apply_gradients(zip(self.generator_f_gradients, self.generator_f.trainable_variables))
-        
-        self.discriminator_x_optimizer.apply_gradients(zip(self.discriminator_x_gradients, self.discriminator_x.trainable_variables))
-        self.discriminator_y_optimizer.apply_gradients(zip(self.discriminator_y_gradients, self.discriminator_y.trainable_variables))
-
-
-        return total_gen_g_loss, total_gen_f_loss, disc_x_loss, disc_y_loss
+        return total_reconstruction_loss, total_disentanglement_loss, total_cycle_loss, total_attr_cycle_loss
 
 
     def train(self, epochs=40):

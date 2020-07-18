@@ -14,10 +14,14 @@ FACES_SYNTH_PATH = 'data/dummy/synth_'
 
 IMG_SIZE = (128, 128)
 IMG_SIZE_SYNTH = (3*128, 3*128)
-BATCH_SIZE = 1
+BATCH_SIZE = 50
 
 EPOCHS = 40
 
+
+
+def now():
+    return time.time()
 
 
 def normalize(img):
@@ -31,24 +35,13 @@ def normalize(img):
 
 
 def split_to_attributes(img):
-    # img_np = np.array(Image.open(img))
+    window = int(img.shape[1] / 3)
 
-    # h_window = int(img_np.shape[0] / 3)
-    # w_window = int(img_np.shape[1] / 3)
+    rest = img[:, :window, :window, :]
+    attr = img[:, window:2*window, :window, :]
+    both = img[:, 2*window:, :window, :]
 
-    # rest = Image.fromarray(img_np[:h_window, :w_window, :]).convert('RGB')
-    # attr = Image.fromarray(img_np[h_window:2*h_window, :w_window, :]).convert('RGB')
-    # both = Image.fromarray(img_np[2*h_window:, :w_window:, :]).convert('RGB')
-
-    img = tf.squeeze(img)
-    window = int(img.shape[0] / 3)
-    # img = img.numpy()
-
-    rest = img[:window, :window, :]
-    attr = img[window:2*window, :window, :]
-    both = img[2*window:, :window, :]
-
-    return tf.expand_dims(attr, 0), tf.expand_dims(rest, 0), tf.expand_dims(both, 0)
+    return attr, rest, both
 
 
 data_gen = tf.keras.preprocessing.image.ImageDataGenerator()
@@ -69,31 +62,48 @@ puppet_GAN.restore_checkpoint()
 
 
 # train
-for epoch in range(EPOCHS):
-    print(f'{epoch+1} / {EPOCHS}')
-    start = time.time()
+reconstruction_loss, disentanglement_loss, cycle_loss, attr_cycle_loss = 0, 0, 0, 0
 
+for epoch in range(EPOCHS):
+    print(f'Epoch: {epoch+1} / {EPOCHS}')
+    start = now()
+
+    batch_count = 1
+    n_batches_real = len(train_real)
+    n_batches_synth = len(train_synth)
     
     for a, b in zip(train_real, train_synth):
+        print(f'Batch: {batch_count} / {n_batches_real} - {n_batches_synth}\n')
+        
+        # don't go over the last batch
+        # because it would break due to different dimensions 
+        # compared to all the other batches
+        if batch_count % n_batches_real != 0 and batch_count % n_batches_synth != 0:
+            a = normalize(a)
+            b = normalize(b)
 
-        a = normalize(a)
-        b = normalize(b)
+            b1, b2, b3 = split_to_attributes(b)
 
-        b1, b2, b3 = split_to_attributes(b)
+            losses = puppet_GAN.train_step(a, b1, b2, b3)
+            
+            reconstruction_loss += losses[0]
+            disentanglement_loss += losses[1]
+            cycle_loss += losses[2]
+            attr_cycle_loss += losses[3]
 
-        print(b1.shape)
-        print(b2.shape)
-        print(b3.shape)
-        print()
-
-        reconstruction_loss, disentanglement_loss, cycle_loss, attr_cycle_loss = puppet_GAN.train_step(a, b1, b2, b3)
+        batch_count += 1
 
     # if epoch % 5 == 0:
     #   ckpt_path = puppet_GAN.ckpt_manager.save()
     #   print(f'Saving checkpoint for epoch {epoch+1} at {ckpt_path}')
 
-    print(f'{reconstruction_loss}\n{disentanglement_loss}\n{cycle_loss}\n{attr_cycle_loss}\n')
-    print(f'Time taken for epoch {epoch+1}: {time.time()-start} sec. \n')
+
+    print(f'Reconstruction Loss:\t{reconstruction_loss}\n   \
+            Disentanglement Loss:\t{disentanglement_loss}\n \
+            Cycle Loss:\t{cycle_loss}\n                     \
+            Attribute Cycle Loss:\t{attr_cycle_loss}\n')
+
+    print(f'Time taken for epoch {epoch+1}: {now()-start} sec. \n')
 
 
 
