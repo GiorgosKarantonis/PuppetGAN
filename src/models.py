@@ -92,55 +92,85 @@ def bottleneck(dim=128):
     return result
 
 
-def generator(  img_height, 
-                img_width, 
-                encoder, 
-                decoder, 
-                output_channels, 
-                batch_size, 
-                norm_type='batchnorm', 
-                combine_inputs=False):
+def generator_single(   img_height, 
+                        img_width, 
+                        encoder, 
+                        decoder, 
+                        output_channels, 
+                        batch_size, 
+                        norm_type='batchnorm'):
     
+    inputs = tf.keras.layers.Input(shape=[128, 128, output_channels], batch_size=batch_size)
 
-    if not combine_inputs:
-        inputs = tf.keras.layers.Input(shape=[128, 128, output_channels], batch_size=batch_size)
-
-        x = inputs
-    else:
-        inputs = tf.keras.layers.Input(shape=[2*128, 128, output_channels], batch_size=batch_size)
-
-        x = inputs[:128, :, :]
-        x2 = inputs[128:, :, :]
-
-
-        assert x.get_shape().as_list() == x2.get_shape().as_list()
+    x = inputs
 
     encoder_, bottleneck_ = encoder
     
     # Downsampling
-    if not combine_inputs:
-        for down in encoder_:
-            x = down(x)
-    else:
-        for down in encoder_:
-            x = down(x)
-            x2 = down(x2)
+    for down in encoder_:
+        x = down(x)
 
     if bottleneck_:
         encoder_output_shape = x.get_shape().as_list()
         encoder_output_shape_no_bs = encoder_output_shape[1:]  # don't include batch size
 
-        if not combine_inputs:
-            x = bottleneck_(x)
-            attr, rest = tf.split(x, 2, axis=1)
-        else:
-            x = bottleneck_(x)
-            _, rest = tf.split(x, 2, axis=1)
-
-            x2 = bottleneck_(x2)
-            attr, _ = tf.split(x2, 2, axis=1)
+        x = bottleneck_(x)
+        attr, rest = tf.split(x, 2, axis=1)
 
         # ADAPT THIS TO THE VARIOUS ATTR, REST
+        x = tf.keras.layers.concatenate([attr, rest])
+        x = tf.keras.layers.Dense(np.prod(encoder_output_shape_no_bs))(x)
+
+        x = tf.reshape(x, encoder_output_shape)
+
+    # Upsampling
+    for up in decoder:
+        x = up(x)
+
+    x = tf.keras.layers.Conv2DTranspose(    output_channels, 
+                                            4, 
+                                            strides=2,
+                                            padding='same', 
+                                            kernel_initializer=tf.random_normal_initializer(0., 0.02),
+                                            activation='tanh')(x)  # (bs, 256, 256, 3)
+
+    return tf.keras.Model(inputs=inputs, outputs=x)
+
+
+def generator_combined( img_height, 
+                        img_width, 
+                        encoder, 
+                        decoder, 
+                        output_channels, 
+                        batch_size, 
+                        norm_type='batchnorm'):
+    
+
+    inputs = tf.keras.layers.Input(shape=[2*128, 128, output_channels], batch_size=batch_size)
+
+    x1 = inputs[:128, :, :]
+    x2 = inputs[128:, :, :]
+
+
+    assert x1.get_shape().as_list() == x2.get_shape().as_list()
+
+    encoder_, bottleneck_ = encoder
+    
+    # Downsampling
+    for down in encoder_:
+        x1 = down(x1)
+        x2 = down(x2)
+
+    if bottleneck_:
+        encoder_output_shape = x1.get_shape().as_list()
+        encoder_output_shape_no_bs = encoder_output_shape[1:]  # don't include batch size
+
+        x1 = bottleneck_(x1)
+        _, rest = tf.split(x1, 2, axis=1)
+
+        x2 = bottleneck_(x2)
+        attr, _ = tf.split(x2, 2, axis=1)
+
         x = tf.keras.layers.concatenate([attr, rest])
         x = tf.keras.layers.Dense(np.prod(encoder_output_shape_no_bs))(x)
 

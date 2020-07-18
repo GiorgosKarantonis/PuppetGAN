@@ -33,6 +33,7 @@ class PuppetGAN:
 
         self.gen_dec_r, self.gen_dec_r_opt, self.gen_dec_r_grads = self.init_generator(encoder=self.encoder, decoder=self.decoder_real)
         self.gen_dec_s, self.gen_dec_s_opt, self.gen_dec_s_grads = self.init_generator(encoder=self.encoder, decoder=self.decoder_synth)
+        
         self.gen_comb_dec_r, self.gen_comb_dec_r_opt, self.gen_comb_dec_r_grads = self.init_generator(  encoder=self.encoder, 
                                                                                                         decoder=self.decoder_real, 
                                                                                                         combine_inputs=True)
@@ -87,7 +88,7 @@ class PuppetGAN:
         return discriminator, optimizer, gradients
 
 
-    def init_encoder(self, norm_type='instancenorm', use_bottleneck=True):
+    def init_encoder(self, norm_type='batchnorm', use_bottleneck=True):
         encoder = [
             models.downsample(64, 4, norm_type, apply_norm=False),  # (bs, 128, 128, 64)
             models.downsample(128, 4, norm_type),  # (bs, 64, 64, 128)
@@ -106,7 +107,7 @@ class PuppetGAN:
         return encoder, bottleneck
 
 
-    def init_decoder(self, norm_type='instancenorm'):
+    def init_decoder(self, norm_type='batchnorm'):
         return [
             # models.upsample(512, 4, norm_type, apply_dropout=True),  # (bs, 2, 2, 1024)
             models.upsample(512, 4, norm_type, apply_dropout=True),  # (bs, 4, 4, 1024)
@@ -120,16 +121,24 @@ class PuppetGAN:
 
     def create_generator(self, encoder, decoder, combine_inputs=False, **kwargs):
         if 'norm_type' not in kwargs:
-            kwargs['norm_type'] = 'instancenorm'
+            kwargs['norm_type'] = 'batchnorm'  # 'instancenorm'
 
-        generator = models.generator(   self.img_height, 
-                                        self.img_width, 
-                                        encoder=encoder, 
-                                        decoder=decoder, 
-                                        combine_inputs=combine_inputs, 
-                                        output_channels=self.output_channels, 
-                                        batch_size=self.batch_size, 
-                                        norm_type=kwargs['norm_type'])
+        if not combine_inputs:
+            generator = models.generator_single(    self.img_height, 
+                                                    self.img_width, 
+                                                    encoder=encoder, 
+                                                    decoder=decoder, 
+                                                    output_channels=self.output_channels, 
+                                                    batch_size=self.batch_size, 
+                                                    norm_type=kwargs['norm_type'])
+        else:
+            generator = models.generator_combined(  self.img_height, 
+                                                    self.img_width, 
+                                                    encoder=encoder, 
+                                                    decoder=decoder, 
+                                                    output_channels=self.output_channels, 
+                                                    batch_size=self.batch_size, 
+                                                    norm_type=kwargs['norm_type'])
 
 
         return generator
@@ -138,7 +147,7 @@ class PuppetGAN:
     def create_discriminator(self, discriminator_type='pix2pix', **kwargs):
         if discriminator_type == 'pix2pix':
             if 'norm_type' not in kwargs:
-                kwargs['norm_type'] = 'instancenorm'
+                kwargs['norm_type'] = 'batchnorm'
 
             if 'target' not in kwargs:
                 kwargs['target'] = False
@@ -210,10 +219,10 @@ class PuppetGAN:
             reconstruction_loss_b2 = self.l_p_loss(b2, b2_hat, p=1)
             reconstruction_loss_b3 = self.l_p_loss(b3, b3_hat, p=1)
             
-            total_reconstruction_loss = reconstruction_loss_a       \
-                                        + reconstruction_loss_b1    \
-                                        + reconstruction_loss_b2    \
-                                        + reconstruction_loss_b3    \
+            total_reconstruction_loss =     reconstruction_loss_a   \
+                                        +   reconstruction_loss_b1  \
+                                        +   reconstruction_loss_b2  \
+                                        +   reconstruction_loss_b3  \
 
 
             # Dissentaglement Loss

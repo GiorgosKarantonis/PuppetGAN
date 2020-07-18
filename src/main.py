@@ -5,7 +5,11 @@ import numpy as np
 from PIL import Image
 
 import tensorflow as tf
+import tensorflow_datasets as tfds
+
 import puppetGAN as puppet
+
+from itertools import islice
 
 
 
@@ -61,49 +65,48 @@ puppet_GAN = puppet.PuppetGAN(img_size=IMG_SIZE, batch_size=BATCH_SIZE)
 puppet_GAN.restore_checkpoint()
 
 
-# train
-reconstruction_loss, disentanglement_loss, cycle_loss, attr_cycle_loss = 0, 0, 0, 0
+n_batches_real = len(train_real) if len(train_real) % BATCH_SIZE == 0 else len(train_real) - 1
 
+train_real = list(islice(train_real, n_batches_real))
+train_synth = list(islice(train_synth, n_batches_real))
+
+
+# train
 for epoch in range(EPOCHS):
-    print(f'Epoch: {epoch+1} / {EPOCHS}')
+    reconstruction_loss, disentanglement_loss, cycle_loss, attr_cycle_loss = 0, 0, 0, 0
+
+    print(f'\nEpoch: {epoch+1} / {EPOCHS}')
     start = now()
 
-    batch_count = 1
-    n_batches_real = len(train_real)
-    n_batches_synth = len(train_synth)
-    
+    batch_count = 1    
     for a, b in zip(train_real, train_synth):
-        print(f'Batch: {batch_count} / {n_batches_real} - {n_batches_synth}\n')
+        print(f'\tBatch: {batch_count} / {n_batches_real}\r', end='')
+
+        a = normalize(a)
+        b = normalize(b)
+
+        b1, b2, b3 = split_to_attributes(b)
+
+        rec, dis, cycle, attr_cycle = puppet_GAN.train_step(a, b1, b2, b3)
         
-        # don't go over the last batch
-        # because it would break due to different dimensions 
-        # compared to all the other batches
-        if batch_count % n_batches_real != 0 and batch_count % n_batches_synth != 0:
-            a = normalize(a)
-            b = normalize(b)
-
-            b1, b2, b3 = split_to_attributes(b)
-
-            losses = puppet_GAN.train_step(a, b1, b2, b3)
-            
-            reconstruction_loss += losses[0]
-            disentanglement_loss += losses[1]
-            cycle_loss += losses[2]
-            attr_cycle_loss += losses[3]
+        reconstruction_loss += rec
+        disentanglement_loss += dis
+        cycle_loss += cycle
+        attr_cycle_loss += attr_cycle
 
         batch_count += 1
 
     # if epoch % 5 == 0:
     #   ckpt_path = puppet_GAN.ckpt_manager.save()
-    #   print(f'Saving checkpoint for epoch {epoch+1} at {ckpt_path}')
+    #   print(f'\tSaving checkpoint for epoch {epoch+1} at {ckpt_path}\n')
 
 
-    print(f'Reconstruction Loss:\t{reconstruction_loss}\n   \
-            Disentanglement Loss:\t{disentanglement_loss}\n \
-            Cycle Loss:\t{cycle_loss}\n                     \
-            Attribute Cycle Loss:\t{attr_cycle_loss}\n')
+    print(f'\tReconstruction Loss:\t{reconstruction_loss / batch_count}')
+    print(f'\tDisentanglement Loss:\t{disentanglement_loss / batch_count}')
+    print(f'\tCycle Loss:\t\t{cycle_loss / batch_count}')
+    print(f'\tAttribute Cycle Loss:\t{attr_cycle_loss / batch_count}')
 
-    print(f'Time taken for epoch {epoch+1}: {now()-start} sec. \n')
+    print(f'\n\tTime taken for epoch {epoch+1}: {now()-start} sec. ')
 
 
 
