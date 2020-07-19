@@ -2,7 +2,6 @@
     Adapted from:
     https://github.com/tensorflow/examples/blob/master/tensorflow_examples/models/pix2pix/pix2pix.py
 '''
-
 import numpy as np
 import tensorflow as tf
 
@@ -92,15 +91,12 @@ def bottleneck(dim=128):
     return result
 
 
-def generator_single(   img_height, 
-                        img_width, 
-                        encoder, 
+def generator_single(   encoder, 
                         decoder, 
-                        output_channels, 
                         batch_size, 
                         norm_type='batchnorm'):
     
-    inputs = tf.keras.layers.Input(shape=[128, 128, output_channels], batch_size=batch_size)
+    inputs = tf.keras.layers.Input(shape=[128, 128, 3], batch_size=batch_size)
 
     x = inputs
 
@@ -127,7 +123,7 @@ def generator_single(   img_height,
     for up in decoder:
         x = up(x)
 
-    x = tf.keras.layers.Conv2DTranspose(    output_channels, 
+    x = tf.keras.layers.Conv2DTranspose(    3, 
                                             4, 
                                             strides=2,
                                             padding='same', 
@@ -137,16 +133,13 @@ def generator_single(   img_height,
     return tf.keras.Model(inputs=inputs, outputs=x)
 
 
-def generator_combined( img_height, 
-                        img_width, 
-                        encoder, 
+def generator_combined( encoder, 
                         decoder, 
-                        output_channels, 
                         batch_size, 
                         norm_type='batchnorm'):
     
 
-    inputs = tf.keras.layers.Input(shape=[2*128, 128, output_channels], batch_size=batch_size)
+    inputs = tf.keras.layers.Input(shape=[2*128, 128, 3], batch_size=batch_size)
 
     x1 = inputs[:128, :, :]
     x2 = inputs[128:, :, :]
@@ -180,7 +173,7 @@ def generator_combined( img_height,
     for up in decoder:
         x = up(x)
 
-    x = tf.keras.layers.Conv2DTranspose(    output_channels, 
+    x = tf.keras.layers.Conv2DTranspose(    3, 
                                             4, 
                                             strides=2,
                                             padding='same', 

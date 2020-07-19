@@ -1,7 +1,5 @@
-'''
-    Partially apapted from: 
-    https://github.com/tensorflow/docs/blob/master/site/en/tutorials/generative/cyclegan.ipynb
-'''
+from time import time
+from itertools import islice
 
 import numpy as np
 import tensorflow as tf
@@ -11,16 +9,8 @@ import models
 
 
 class PuppetGAN:
-    def __init__(   self, 
-                    img_size=(256, 256), 
-                    batch_size=1, 
-                    output_channels=3):
-        
-        self.img_height = img_size[0]
-        self.img_width = img_size[1]
+    def __init__(self, batch_size=1):
         self.batch_size = batch_size
-
-        self.output_channels = output_channels
 
         self.gan_loss = tf.keras.losses.MSE
 
@@ -38,7 +28,6 @@ class PuppetGAN:
                                                                                                         decoder=self.decoder_synth, 
                                                                                                         combine_inputs=True)
 
-        # JUST FOR TESTING, DELETE IT WHEN DONE
         self.disc_real, self.disc_real_opt, self.disc_real_grads = self.init_discriminator()
         self.disc_synth, self.disc_synth_opt, self.disc_synth_grads = self.init_discriminator()
 
@@ -51,8 +40,8 @@ class PuppetGAN:
                                     generator_decoder_synth=self.gen_dec_r, 
                                     generator_combined_decoder_real=self.gen_comb_dec_r, 
                                     generator_combined_decoder_synth=self.gen_comb_dec_s, 
-                                    discriminator_x=self.discriminator_x,
-                                    discriminator_y=self.discriminator_y,
+                                    disc_real=self.disc_real,
+                                    disc_synth=self.disc_synth,
                                     generator_decoder_real_optimizer=self.gen_dec_r_opt, 
                                     generator_decoder_synth_optimizer=self.gen_dec_s_opt, 
                                     generator_combined_decoder_real_optimizer=self.gen_comb_dec_r_opt, 
@@ -66,7 +55,7 @@ class PuppetGAN:
     def restore_checkpoint(self):
         if self.ckpt_manager.latest_checkpoint:
             self.ckpt.restore(self.ckpt_manager.latest_checkpoint)
-            print ('Latest checkpoint restored!')
+            print ('Latest checkpoint restored!')        
 
 
     def init_generator(self, encoder, decoder, combine_inputs=False, lr=2e-4, beta_1=.5):
@@ -121,19 +110,13 @@ class PuppetGAN:
             kwargs['norm_type'] = 'batchnorm'  # 'instancenorm'
 
         if not combine_inputs:
-            generator = models.generator_single(    self.img_height, 
-                                                    self.img_width, 
-                                                    encoder=encoder, 
+            generator = models.generator_single(    encoder=encoder, 
                                                     decoder=decoder, 
-                                                    output_channels=self.output_channels, 
                                                     batch_size=self.batch_size, 
                                                     norm_type=kwargs['norm_type'])
         else:
-            generator = models.generator_combined(  self.img_height, 
-                                                    self.img_width, 
-                                                    encoder=encoder, 
+            generator = models.generator_combined(  encoder=encoder, 
                                                     decoder=decoder, 
-                                                    output_channels=self.output_channels, 
                                                     batch_size=self.batch_size, 
                                                     norm_type=kwargs['norm_type'])
 
@@ -182,40 +165,64 @@ class PuppetGAN:
         return img + noise
 
 
+    def normalize(self, img):
+        '''
+            Normalizing the images to [-1, 1]. 
+        '''
+        img = tf.cast(img, tf.float32)
+        img = (img / 127.5) - 1
+        
+        return img
+
+
+    def split_to_attributes(self, img):
+        window = int(img.shape[1] / 3)
+
+        rest = img[:, :window, :window, :]
+        attr = img[:, window:2*window, :window, :]
+        both = img[:, 2*window:, :window, :]
+
+        return attr, rest, both
+
+
+    def get_batch_flow(self, generator, path, target_size):
+        return generator.flow_from_directory(   path, 
+                                                target_size=target_size, 
+                                                batch_size=self.batch_size, 
+                                                shuffle=True, 
+                                                class_mode=None)
+
+
     @tf.function
     def train_step(self, a, b1, b2, b3):
-        # b = tf.keras.layers.concatenate([b1, b2, b3])
-
         with tf.GradientTape(persistent=True) as tape:
             # persistent=True because the tape is used more than once to calculate the gradients
 
             total_discriminator_loss_real, total_discriminator_loss_synth = 0, 0
 
-
             # Reconstruction Loss            
             a_hat = self.gen_dec_r(a, training=True)
 
             reconstruction_loss_a = self.l_p_loss(a, a_hat, p=1)
-            total_discriminator_loss_real += self.discriminator_loss(real=a, generated=a_hat)
+            total_discriminator_loss_real += self.discriminator_loss(real=self.disc_real(a), generated=self.disc_real(a_hat))
 
 
             b1_hat = self.gen_dec_s(b1, training=True)
 
             reconstruction_loss_b1 = self.l_p_loss(b1, b1_hat, p=1)
-            total_discriminator_loss_synth += self.discriminator_loss(real=b1, generated=b1_hat)
+            total_discriminator_loss_synth += self.discriminator_loss(real=self.disc_synth(b1), generated=self.disc_synth(b1_hat))
 
 
             b2_hat = self.gen_dec_s(b2, training=True)
 
             reconstruction_loss_b2 = self.l_p_loss(b2, b2_hat, p=1)
-            total_discriminator_loss_synth += self.discriminator_loss(real=b2, generated=b2_hat)
+            total_discriminator_loss_synth += self.discriminator_loss(real=self.disc_synth(b2), generated=self.disc_synth(b2_hat))
 
 
             b3_hat_rec = self.gen_dec_s(b3, training=True)
 
             reconstruction_loss_b3 = self.l_p_loss(b3, b3_hat_rec, p=1)
-            total_discriminator_loss_synth += self.discriminator_loss(real=b3, generated=b3_hat_rec)
-
+            total_discriminator_loss_synth += self.discriminator_loss(real=self.disc_synth(b3), generated=self.disc_synth(b3_hat_rec))
 
             total_reconstruction_loss =     reconstruction_loss_a   \
                                         +   reconstruction_loss_b1  \
@@ -227,7 +234,7 @@ class PuppetGAN:
             b3_hat_dis = self.gen_comb_dec_s([b2, b1], training=True)
 
             disentanglement_loss_b3 = self.l_p_loss(b3, b3_hat_dis, p=1)
-            total_discriminator_loss_synth += self.discriminator_loss(real=b3, generated=b3_hat)
+            total_discriminator_loss_synth += self.discriminator_loss(real=self.disc_synth(b3), generated=self.disc_synth(b3_hat_dis))
             
 
             total_disentanglement_loss = disentanglement_loss_b3
@@ -238,42 +245,38 @@ class PuppetGAN:
             b_cycled_tilde = self.make_noisy(b_cycled_tilde)
             a_cycled_hat = self.gen_dec_r(b_cycled_tilde, training=True)
 
-            total_discriminator_loss_real += self.discriminator_loss(real=a, generated=a_cycled_hat)
-            total_discriminator_loss_synth += self.discriminator_loss(real=b1, generated=b_cycled_tilde)
-
             cycle_loss_a = self.l_p_loss(a, a_cycled_hat, p=1)
+            total_discriminator_loss_real += self.discriminator_loss(real=self.disc_real(a), generated=self.disc_real(a_cycled_hat))
+            total_discriminator_loss_synth += self.discriminator_loss(real=self.disc_synth(b1), generated=self.disc_synth(b_cycled_tilde))
 
 
             a1_cycled_tilde = self.gen_dec_r(b1, training=True)
             a1_cycled_tilde = self.make_noisy(a1_cycled_tilde)
             b1_cycled_hat = self.gen_dec_s(a1_cycled_tilde, training=True)
 
-            total_discriminator_loss_real += self.discriminator_loss(real=a, generated=a1_cycled_tilde)
-            total_discriminator_loss_synth += self.discriminator_loss(real=b1, generated=b1_cycled_hat)
-
             cycle_loss_b1 = self.l_p_loss(b1, b1_cycled_hat, p=1)
+            total_discriminator_loss_real += self.discriminator_loss(real=self.disc_real(a), generated=self.disc_real(a1_cycled_tilde))
+            total_discriminator_loss_synth += self.discriminator_loss(real=self.disc_synth(b1), generated=self.disc_synth(b1_cycled_hat))
 
 
             a2_cycled_tilde = self.gen_dec_r(b2, training=True)
             a2_cycled_tilde = self.make_noisy(a2_cycled_tilde)
             b2_cycled_hat = self.gen_dec_s(a2_cycled_tilde, training=True)
 
-            total_discriminator_loss_real += self.discriminator_loss(real=a, generated=a2_cycled_tilde)
-            total_discriminator_loss_synth += self.discriminator_loss(real=b2, generated=b2_cycled_hat)
-
             cycle_loss_b2 = self.l_p_loss(b2, b2_cycled_hat, p=1)
+            total_discriminator_loss_real += self.discriminator_loss(real=self.disc_real(a), generated=self.disc_real(a2_cycled_tilde))
+            total_discriminator_loss_synth += self.discriminator_loss(real=self.disc_synth(b2), generated=self.disc_synth(b2_cycled_hat))
 
 
             a3_cycled_tilde = self.gen_dec_r(b3, training=True)
             a3_cycled_tilde = self.make_noisy(a3_cycled_tilde)
             b3_cycled_hat = self.gen_dec_s(a3_cycled_tilde, training=True)
 
-            total_discriminator_loss_real += self.discriminator_loss(real=a, generated=a3_cycled_tilde)
-            total_discriminator_loss_synth += self.discriminator_loss(real=b3, generated=b3_cycled_hat)
-            
             cycle_loss_b3 = self.l_p_loss(b3, b3_cycled_hat, p=1)
-            
+            total_discriminator_loss_real += self.discriminator_loss(real=self.disc_real(a), generated=self.disc_real(a3_cycled_tilde))
+            total_discriminator_loss_synth += self.discriminator_loss(real=self.disc_synth(b3), generated=self.disc_synth(b3_cycled_hat))
 
+            
             total_cycle_loss = cycle_loss_a + cycle_loss_b1 + cycle_loss_b2 + cycle_loss_b3
 
 
@@ -282,22 +285,20 @@ class PuppetGAN:
             a_tilde = self.make_noisy(a_tilde)
             b3_hat_star = self.gen_comb_dec_s([b2, a_tilde], training=True)
 
-            total_discriminator_loss_real += self.discriminator_loss(real=a, generated=a_tilde)
-            total_discriminator_loss_synth += self.discriminator_loss(real=b3, generated=b3_hat_star)
-
             attr_cycle_loss_b3 = self.l_p_loss(b3, b3_hat_star, p=1)
+            total_discriminator_loss_real += self.discriminator_loss(real=self.disc_real(a), generated=self.disc_real(a_tilde))
+            total_discriminator_loss_synth += self.discriminator_loss(real=self.disc_synth(b3), generated=self.disc_synth(b3_hat_star))
 
 
             b_tilde = self.gen_comb_dec_s([b1, a], training=True)
             b_tilde = self.make_noisy(b_tilde)
             a_hat_star = self.gen_comb_dec_r([a, b_tilde], training=True)
 
-            total_discriminator_loss_real += self.discriminator_loss(real=a, generated=a_hat_star)
-            total_discriminator_loss_synth += self.discriminator_loss(real=b1, generated=b_tilde)
-            
             attr_cycle_loss_a = self.l_p_loss(a, a_hat_star, p=1)
+            total_discriminator_loss_real += self.discriminator_loss(real=self.disc_real(a), generated=self.disc_real(a_hat_star))
+            total_discriminator_loss_synth += self.discriminator_loss(real=self.disc_synth(b1), generated=self.disc_synth(b_tilde))
 
-            
+
             total_attr_cycle_loss = attr_cycle_loss_b3 + attr_cycle_loss_a
 
 
@@ -311,15 +312,18 @@ class PuppetGAN:
         # Calculate the Gradients
         self.gen_dec_r_grads = tape.gradient(total_gen_dec_r_loss, self.gen_dec_r.trainable_variables)
         self.gen_dec_s_grads = tape.gradient(total_gen_dec_s_loss, self.gen_dec_s.trainable_variables)
+        
         self.gen_comb_dec_r_grads = tape.gradient(total_gen_comb_dec_r_loss, self.gen_comb_dec_r.trainable_variables)
         self.gen_comb_dec_s_grads = tape.gradient(total_gen_comb_dec_s_loss, self.gen_comb_dec_s.trainable_variables)
 
         self.disc_real_grads = tape.gradient(total_discriminator_loss_real, self.disc_real.trainable_variables)
         self.disc_synth_grads = tape.gradient(total_discriminator_loss_synth, self.disc_synth.trainable_variables)
 
+
         # Apply the Gradients to the Optimizers
         self.gen_dec_r_opt.apply_gradients(zip(self.gen_dec_r_grads, self.gen_dec_r.trainable_variables))
         self.gen_dec_s_opt.apply_gradients(zip(self.gen_dec_s_grads, self.gen_dec_s.trainable_variables))
+        
         self.gen_comb_dec_r_opt.apply_gradients(zip(self.gen_comb_dec_r_grads, self.gen_comb_dec_r.trainable_variables))
         self.gen_comb_dec_s_opt.apply_gradients(zip(self.gen_comb_dec_s_grads, self.gen_comb_dec_s.trainable_variables))
 
@@ -335,8 +339,53 @@ class PuppetGAN:
                 total_discriminator_loss_synth
 
 
-    def train(self, epochs=40):
-        raise NotImplementedError
+    def train(self, path_real, path_synth, img_size=(128, 128), epochs=50, save_every=5):
+        data_generator = tf.keras.preprocessing.image.ImageDataGenerator()
+
+        # train
+        for epoch in range(epochs):
+            print(f'\nEpoch: {epoch+1} / {epochs}')
+            
+            start = time()
+            losses = np.zeros([6])
+
+            data_real = self.get_batch_flow(data_generator, path_real, img_size)
+            data_synth = self.get_batch_flow(data_generator, path_synth, tuple(3*dim for dim in img_size))
+
+            n_batches_real = len(data_real) if len(data_real) % self.batch_size == 0 else len(data_real) - 1
+
+            data_real = list(islice(data_real, n_batches_real))
+            data_synth = list(islice(data_synth, n_batches_real))
+
+            for i, (a, b) in enumerate(zip(data_real, data_synth)):
+                print(f'\tBatch: {i+1} / {n_batches_real}\r', end='')
+
+                a = self.normalize(a)
+                b = self.normalize(b)
+
+                b1, b2, b3 = self.split_to_attributes(b)
+
+                batch_losses = self.train_step(a, b1, b2, b3)
+                losses = np.add(losses, batch_losses)
+
+
+            losses = losses / n_batches_real
+
+            if save_every and epoch % save_every == 0:
+                ckpt_path = self.ckpt_manager.save()
+                print(f'\tSaving checkpoint for epoch {epoch+1} at {ckpt_path}\n')
+
+
+            print(f'\tReconstruction Loss:\t{losses[0]}')
+            print(f'\tDisentanglement Loss:\t{losses[1]}')
+            print(f'\tCycle Loss:\t\t{losses[2]}')
+            print(f'\tAttribute Cycle Loss:\t{losses[3]}')
+            
+            # print(f'\tReal Discriminator Loss:\t{losses[4]}')
+            # print(f'\tSynthetic Discriminator Loss:\t{losses[5]}')
+
+
+            print(f'\n\tTime taken for epoch {epoch+1}: {time()-start}sec.')
 
 
 
