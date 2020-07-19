@@ -14,17 +14,14 @@ class PuppetGAN:
     def __init__(   self, 
                     img_size=(256, 256), 
                     batch_size=1, 
-                    output_channels=3, 
-                    lamda=10):
+                    output_channels=3):
         
         self.img_height = img_size[0]
         self.img_width = img_size[1]
         self.batch_size = batch_size
 
         self.output_channels = output_channels
-        self.lamda = lamda
 
-        # self.gan_loss = tf.keras.losses.BinaryCrossentropy(from_logits=True)
         self.gan_loss = tf.keras.losses.MSE
 
         self.encoder = self.init_encoder()
@@ -42,8 +39,8 @@ class PuppetGAN:
                                                                                                         combine_inputs=True)
 
         # JUST FOR TESTING, DELETE IT WHEN DONE
-        self.discriminator_x, self.discriminator_x_optimizer, self.discriminator_x_gradients = self.init_discriminator()
-        self.discriminator_y, self.discriminator_y_optimizer, self.discriminator_y_gradients = self.init_discriminator()
+        self.disc_real, self.disc_real_opt, self.disc_real_grads = self.init_discriminator()
+        self.disc_synth, self.disc_synth_opt, self.disc_synth_grads = self.init_discriminator()
 
         self.checkpoint_path = "./checkpoints/train"
         self.ckpt, self.ckpt_manager = self.define_checkpoints()
@@ -161,29 +158,13 @@ class PuppetGAN:
         return discriminator
 
 
-    def discriminator_loss(self, real, generated):
+    def discriminator_loss(self, real, generated, weight=.5):
         real_loss = self.gan_loss(tf.ones_like(real), real)
         generated_loss = self.gan_loss(tf.zeros_like(generated), generated)
 
         total_disc_loss = real_loss + generated_loss
 
-        return total_disc_loss * 0.5
-
-
-    def generator_loss(self, generated):
-        return self.gan_loss(tf.ones_like(generated), generated)
-
-
-    def cycle_loss(self, real, cycled):
-        loss = tf.reduce_mean(tf.abs(real - cycled))
-        
-        return self.lamda * loss
-
-
-    def identity_loss(self, real, same_image):
-        loss = tf.reduce_mean(tf.abs(real - same_image))
-        
-        return self.lamda * 0.5 * loss
+        return weight * total_disc_loss
 
 
     def l_p_loss(self, real, generated, p=2, weight=1):
@@ -208,28 +189,47 @@ class PuppetGAN:
         with tf.GradientTape(persistent=True) as tape:
             # persistent=True because the tape is used more than once to calculate the gradients
 
+            total_discriminator_loss_real, total_discriminator_loss_synth = 0, 0
+
+
             # Reconstruction Loss            
             a_hat = self.gen_dec_r(a, training=True)
-            b1_hat = self.gen_dec_s(b1, training=True)
-            b2_hat = self.gen_dec_s(b2, training=True)
-            b3_hat = self.gen_dec_s(b3, training=True)
 
             reconstruction_loss_a = self.l_p_loss(a, a_hat, p=1)
+            total_discriminator_loss_real += self.discriminator_loss(real=a, generated=a_hat)
+
+
+            b1_hat = self.gen_dec_s(b1, training=True)
+
             reconstruction_loss_b1 = self.l_p_loss(b1, b1_hat, p=1)
+            total_discriminator_loss_synth += self.discriminator_loss(real=b1, generated=b1_hat)
+
+
+            b2_hat = self.gen_dec_s(b2, training=True)
+
             reconstruction_loss_b2 = self.l_p_loss(b2, b2_hat, p=1)
-            reconstruction_loss_b3 = self.l_p_loss(b3, b3_hat, p=1)
-            
+            total_discriminator_loss_synth += self.discriminator_loss(real=b2, generated=b2_hat)
+
+
+            b3_hat_rec = self.gen_dec_s(b3, training=True)
+
+            reconstruction_loss_b3 = self.l_p_loss(b3, b3_hat_rec, p=1)
+            total_discriminator_loss_synth += self.discriminator_loss(real=b3, generated=b3_hat_rec)
+
+
             total_reconstruction_loss =     reconstruction_loss_a   \
                                         +   reconstruction_loss_b1  \
                                         +   reconstruction_loss_b2  \
-                                        +   reconstruction_loss_b3  \
+                                        +   reconstruction_loss_b3
 
 
             # Dissentaglement Loss
-            b3_hat = self.gen_comb_dec_s([b2, b1], training=True)
+            b3_hat_dis = self.gen_comb_dec_s([b2, b1], training=True)
 
-            disentanglement_loss_b3 = self.l_p_loss(b3, b3_hat, p=1)
+            disentanglement_loss_b3 = self.l_p_loss(b3, b3_hat_dis, p=1)
+            total_discriminator_loss_synth += self.discriminator_loss(real=b3, generated=b3_hat)
             
+
             total_disentanglement_loss = disentanglement_loss_b3
 
 
@@ -238,23 +238,42 @@ class PuppetGAN:
             b_cycled_tilde = self.make_noisy(b_cycled_tilde)
             a_cycled_hat = self.gen_dec_r(b_cycled_tilde, training=True)
 
+            total_discriminator_loss_real += self.discriminator_loss(real=a, generated=a_cycled_hat)
+            total_discriminator_loss_synth += self.discriminator_loss(real=b1, generated=b_cycled_tilde)
+
+            cycle_loss_a = self.l_p_loss(a, a_cycled_hat, p=1)
+
+
             a1_cycled_tilde = self.gen_dec_r(b1, training=True)
             a1_cycled_tilde = self.make_noisy(a1_cycled_tilde)
             b1_cycled_hat = self.gen_dec_s(a1_cycled_tilde, training=True)
+
+            total_discriminator_loss_real += self.discriminator_loss(real=a, generated=a1_cycled_tilde)
+            total_discriminator_loss_synth += self.discriminator_loss(real=b1, generated=b1_cycled_hat)
+
+            cycle_loss_b1 = self.l_p_loss(b1, b1_cycled_hat, p=1)
+
 
             a2_cycled_tilde = self.gen_dec_r(b2, training=True)
             a2_cycled_tilde = self.make_noisy(a2_cycled_tilde)
             b2_cycled_hat = self.gen_dec_s(a2_cycled_tilde, training=True)
 
+            total_discriminator_loss_real += self.discriminator_loss(real=a, generated=a2_cycled_tilde)
+            total_discriminator_loss_synth += self.discriminator_loss(real=b2, generated=b2_cycled_hat)
+
+            cycle_loss_b2 = self.l_p_loss(b2, b2_cycled_hat, p=1)
+
+
             a3_cycled_tilde = self.gen_dec_r(b3, training=True)
             a3_cycled_tilde = self.make_noisy(a3_cycled_tilde)
             b3_cycled_hat = self.gen_dec_s(a3_cycled_tilde, training=True)
 
-            cycle_loss_a = self.l_p_loss(a, a_cycled_hat, p=1)
-            cycle_loss_b1 = self.l_p_loss(b1, b1_cycled_hat, p=1)
-            cycle_loss_b2 = self.l_p_loss(b2, b2_cycled_hat, p=1)
+            total_discriminator_loss_real += self.discriminator_loss(real=a, generated=a3_cycled_tilde)
+            total_discriminator_loss_synth += self.discriminator_loss(real=b3, generated=b3_cycled_hat)
+            
             cycle_loss_b3 = self.l_p_loss(b3, b3_cycled_hat, p=1)
             
+
             total_cycle_loss = cycle_loss_a + cycle_loss_b1 + cycle_loss_b2 + cycle_loss_b3
 
 
@@ -263,12 +282,21 @@ class PuppetGAN:
             a_tilde = self.make_noisy(a_tilde)
             b3_hat_star = self.gen_comb_dec_s([b2, a_tilde], training=True)
 
+            total_discriminator_loss_real += self.discriminator_loss(real=a, generated=a_tilde)
+            total_discriminator_loss_synth += self.discriminator_loss(real=b3, generated=b3_hat_star)
+
+            attr_cycle_loss_b3 = self.l_p_loss(b3, b3_hat_star, p=1)
+
+
             b_tilde = self.gen_comb_dec_s([b1, a], training=True)
             b_tilde = self.make_noisy(b_tilde)
             a_hat_star = self.gen_comb_dec_r([a, b_tilde], training=True)
 
-            attr_cycle_loss_b3 = self.l_p_loss(b3, b3_hat_star, p=1)
+            total_discriminator_loss_real += self.discriminator_loss(real=a, generated=a_hat_star)
+            total_discriminator_loss_synth += self.discriminator_loss(real=b1, generated=b_tilde)
+            
             attr_cycle_loss_a = self.l_p_loss(a, a_hat_star, p=1)
+
             
             total_attr_cycle_loss = attr_cycle_loss_b3 + attr_cycle_loss_a
 
@@ -286,14 +314,25 @@ class PuppetGAN:
         self.gen_comb_dec_r_grads = tape.gradient(total_gen_comb_dec_r_loss, self.gen_comb_dec_r.trainable_variables)
         self.gen_comb_dec_s_grads = tape.gradient(total_gen_comb_dec_s_loss, self.gen_comb_dec_s.trainable_variables)
 
+        self.disc_real_grads = tape.gradient(total_discriminator_loss_real, self.disc_real.trainable_variables)
+        self.disc_synth_grads = tape.gradient(total_discriminator_loss_synth, self.disc_synth.trainable_variables)
+
         # Apply the Gradients to the Optimizers
         self.gen_dec_r_opt.apply_gradients(zip(self.gen_dec_r_grads, self.gen_dec_r.trainable_variables))
         self.gen_dec_s_opt.apply_gradients(zip(self.gen_dec_s_grads, self.gen_dec_s.trainable_variables))
         self.gen_comb_dec_r_opt.apply_gradients(zip(self.gen_comb_dec_r_grads, self.gen_comb_dec_r.trainable_variables))
         self.gen_comb_dec_s_opt.apply_gradients(zip(self.gen_comb_dec_s_grads, self.gen_comb_dec_s.trainable_variables))
 
+        self.disc_real_opt.apply_gradients(zip(self.disc_real_grads, self.disc_real.trainable_variables))
+        self.disc_synth_opt.apply_gradients(zip(self.disc_synth_grads, self.disc_synth.trainable_variables))
 
-        return total_reconstruction_loss, total_disentanglement_loss, total_cycle_loss, total_attr_cycle_loss
+
+        return  total_reconstruction_loss, \
+                total_disentanglement_loss, \
+                total_cycle_loss, \
+                total_attr_cycle_loss, \
+                total_discriminator_loss_real, \
+                total_discriminator_loss_synth
 
 
     def train(self, epochs=40):

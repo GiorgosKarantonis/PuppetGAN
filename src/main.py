@@ -64,19 +64,21 @@ train_synth = data_gen.flow_from_directory(	FACES_SYNTH_PATH,
 puppet_GAN = puppet.PuppetGAN(img_size=IMG_SIZE, batch_size=BATCH_SIZE)
 puppet_GAN.restore_checkpoint()
 
-
 n_batches_real = len(train_real) if len(train_real) % BATCH_SIZE == 0 else len(train_real) - 1
-
-train_real = list(islice(train_real, n_batches_real))
-train_synth = list(islice(train_synth, n_batches_real))
-
 
 # train
 for epoch in range(EPOCHS):
-    reconstruction_loss, disentanglement_loss, cycle_loss, attr_cycle_loss = 0, 0, 0, 0
-
     print(f'\nEpoch: {epoch+1} / {EPOCHS}')
     start = now()
+
+    reconstruction_loss, disentanglement_loss, cycle_loss, attr_cycle_loss = 0, 0, 0, 0
+    disc_real_loss, disc_synth_loss = 0, 0
+
+    train_real = tf.random.shuffle(train_real)
+    train_synth = tf.random.shuffle(train_synth)
+
+    train_real = list(islice(train_real, n_batches_real))
+    train_synth = list(islice(train_synth, n_batches_real))
 
     batch_count = 1    
     for a, b in zip(train_real, train_synth):
@@ -87,12 +89,15 @@ for epoch in range(EPOCHS):
 
         b1, b2, b3 = split_to_attributes(b)
 
-        rec, dis, cycle, attr_cycle = puppet_GAN.train_step(a, b1, b2, b3)
+        rec, dis, cycle, attr_cycle, disc_real, disc_synth = puppet_GAN.train_step(a, b1, b2, b3)
         
         reconstruction_loss += rec
         disentanglement_loss += dis
         cycle_loss += cycle
         attr_cycle_loss += attr_cycle
+
+        disc_real_loss += disc_real
+        disc_synth_loss += disc_synth
 
         batch_count += 1
 
@@ -105,6 +110,10 @@ for epoch in range(EPOCHS):
     print(f'\tDisentanglement Loss:\t{disentanglement_loss / batch_count}')
     print(f'\tCycle Loss:\t\t{cycle_loss / batch_count}')
     print(f'\tAttribute Cycle Loss:\t{attr_cycle_loss / batch_count}')
+    
+    print(f'\tReal Discriminator Loss:\t{disc_real_loss / batch_count}')
+    print(f'\tSynthetic Discriminator Loss:\t{disc_synth_loss / batch_count}')
+
 
     print(f'\n\tTime taken for epoch {epoch+1}: {now()-start} sec. ')
 
