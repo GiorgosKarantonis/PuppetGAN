@@ -218,7 +218,6 @@ class PuppetGAN:
             plt.imsave(f'{save_path}{i}.png', save_img)
 
 
-    # @tf.function
     def train_step(self, a, b1, b2, b3, save=True):
         with tf.GradientTape(persistent=True) as tape:
             # persistent=True because the tape is used more than once to calculate the gradients
