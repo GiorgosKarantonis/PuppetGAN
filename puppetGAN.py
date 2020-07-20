@@ -7,9 +7,16 @@ import tensorflow as tf
 import models
 
 
+import os
+from matplotlib import pyplot as plt
+
+
 
 class PuppetGAN:
     def __init__(self, batch_size=1):
+
+        self.CUR_EPOCH = None
+
         self.batch_size = batch_size
 
         self.gan_loss = tf.keras.losses.MSE
@@ -175,6 +182,10 @@ class PuppetGAN:
         return img
 
 
+    def denormalize(self, img):
+        return ((img + 1) * 127.5) / 255
+
+
     def split_to_attributes(self, img):
         window = int(img.shape[1] / 3)
 
@@ -193,8 +204,22 @@ class PuppetGAN:
                                                 class_mode=None)
 
 
-    @tf.function
-    def train_step(self, a, b1, b2, b3):
+    def save(self, b3, b3_hat_dis):
+        for i, (b3_, b3_hat_dis_) in enumerate(zip(b3, b3_hat_dis)):
+            save_img = np.array([b3_.numpy(), b3_hat_dis_.numpy()])
+            save_path = f'./results/disentangled/epoch_{self.CUR_EPOCH}/'
+
+            save_img = save_img.reshape(-1, 128, 3)
+            save_img = self.denormalize(save_img)
+            
+            if not os.path.exists(save_path):
+                os.makedirs(save_path)
+
+            plt.imsave(f'{save_path}{i}.png', save_img)
+
+
+    # @tf.function
+    def train_step(self, a, b1, b2, b3, save=True):
         with tf.GradientTape(persistent=True) as tape:
             # persistent=True because the tape is used more than once to calculate the gradients
 
@@ -331,6 +356,10 @@ class PuppetGAN:
         self.disc_synth_opt.apply_gradients(zip(self.disc_synth_grads, self.disc_synth.trainable_variables))
 
 
+        if save:
+            self.save(b3, b3_hat_dis)
+
+
         return  total_reconstruction_loss, \
                 total_disentanglement_loss, \
                 total_cycle_loss, \
@@ -339,14 +368,24 @@ class PuppetGAN:
                 total_discriminator_loss_synth
 
 
-    def train(self, path_real, path_synth, img_size=(128, 128), epochs=50, save_every=5):
+    def train(  self, 
+                path_real, 
+                path_synth, 
+                img_size=(128, 128), 
+                epochs=50, 
+                save_model_every=5, 
+                save_images_every=5):
         data_generator = tf.keras.preprocessing.image.ImageDataGenerator()
 
         # train
         for epoch in range(epochs):
+
+            self.CUR_EPOCH = epoch
+
             print(f'\nEpoch: {epoch+1} / {epochs}')
             
             start = time()
+            save_images = False
             losses = np.zeros([6])
 
             data_real = self.get_batch_flow(data_generator, path_real, img_size)
@@ -363,15 +402,18 @@ class PuppetGAN:
                 a = self.normalize(a)
                 b = self.normalize(b)
 
+                if save_images_every and epoch % save_images_every == 0:
+                    save_images=True
+
                 b1, b2, b3 = self.split_to_attributes(b)
 
-                batch_losses = self.train_step(a, b1, b2, b3)
+                batch_losses = self.train_step(a, b1, b2, b3, save_images)
                 losses = np.add(losses, batch_losses)
 
 
             losses = losses / n_batches_real
 
-            if save_every and epoch % save_every == 0:
+            if save_model_every and epoch % save_model_every == 0:
                 ckpt_path = self.ckpt_manager.save()
                 print(f'\tSaving checkpoint for epoch {epoch+1} at {ckpt_path}\n')
 
@@ -386,11 +428,6 @@ class PuppetGAN:
 
 
             print(f'\n\tTime taken for epoch {epoch+1}: {time()-start}sec.')
-
-
-
-
-
 
 
 

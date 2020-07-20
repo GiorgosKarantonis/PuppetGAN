@@ -7,7 +7,7 @@ FACES_SYNTH_PATH = 'data/dummy/synth_'
 
 IMG_SIZE = (128, 128)
 IMG_SIZE_SYNTH = (3*128, 3*128)
-BATCH_SIZE = 50
+BATCH_SIZE = 25
 
 EPOCHS = 40
 

@@ -229,3 +229,4 @@ def pix2pix_discriminator(norm_type='batchnorm', target=True):
 
 
 
+
