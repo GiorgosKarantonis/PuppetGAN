@@ -1,14 +1,13 @@
+import os
+import shutil
 from time import time
 from itertools import islice
+from matplotlib import pyplot as plt
 
 import numpy as np
 import tensorflow as tf
 
 import models
-
-
-import os
-from matplotlib import pyplot as plt
 
 
 
@@ -201,18 +200,23 @@ class PuppetGAN:
                                                 class_mode=None)
 
 
-    def save(self, b1, b2, b3, b3_hat_dis, batch, epoch):
-        for i, (b1_, b2_, b3_, b3_hat_dis_) in enumerate(zip(b1, b2, b3, b3_hat_dis)):
-            save_path = f'./results/disentangled/epoch_{epoch}/'
+    def save(self, b1, b2, b3, b3_hat_dis, batch, epoch, remove_existing=True):
+        base_path = './results/'
+        save_path = f'{base_path}disentangled/epoch_{epoch}/'
 
+        if remove_existing:
+            if os.path.exists(base_path):
+                shutil.rmtree(base_path)
+        
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+
+        for i, (b1_, b2_, b3_, b3_hat_dis_) in enumerate(zip(b1, b2, b3, b3_hat_dis)):
             top = np.concatenate((b1_.numpy(), b2_.numpy()), axis=1)
             bottom = np.concatenate((b3_.numpy(), b3_hat_dis_.numpy()), axis=1)
 
             img = np.concatenate((top, bottom), axis=0)
             img = self.denormalize(img)
-            
-            if not os.path.exists(save_path):
-                os.makedirs(save_path)
 
             plt.imsave(f'{save_path}{batch}_{i}.png', img)
 
@@ -426,9 +430,10 @@ class PuppetGAN:
 
                 losses = np.add(losses, batch_losses)
 
-                if save_images_every and epoch % save_images_every == 0:
-                    self.save(b1, b2, b3, generated_images['disentangled b3'], i, epoch)
 
+            # save only the images from the last batch to save space
+            if save_images_every and epoch % save_images_every == 0:
+                self.save(b1, b2, b3, generated_images['disentangled b3'], i, epoch)
 
             losses = losses / n_batches_real
 
