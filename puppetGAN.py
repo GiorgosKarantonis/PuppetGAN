@@ -432,8 +432,9 @@ class PuppetGAN:
 
 
             # save only the images from the last batch to save space
-            if save_images_every and epoch % save_images_every == 0:
-                self.save(b1, b2, b3, generated_images['disentangled b3'], i, epoch)
+            if save_images_every:
+                if epoch % save_images_every == 0:
+                    self.save(b1, b2, b3, generated_images['disentangled b3'], i, epoch, remove_existing=False)
 
             losses = losses / n_batches_real
 
