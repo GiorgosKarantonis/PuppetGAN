@@ -1,56 +1,62 @@
 import os
-import shutil
 from time import time
 from itertools import islice
-from matplotlib import pyplot as plt
 
 import numpy as np
 import tensorflow as tf
 
-import models
+import utils
+import models as m
 
 
 
 class PuppetGAN:
-    def __init__(self, batch_size=1):
+    def __init__(self, batch_size):
+        self.noise_std = .01
+        self.gan_loss = tf.keras.losses.MeanSquaredError()
+
+        self.encoder = m.get_encoder()
+        self.decoder_real, self.decoder_synth = m.get_decoder(), m.get_decoder()
+
+        self.gen_real, self.gen_real_opt, self.gen_real_grads = None, None, None
+        self.gen_synth, self.gen_synth_opt, self.gen_synth_grads = None, None, None
+
+        self.disc_real, self.disc_real_opt, self.disc_real_grads = None, None, None
+        self.disc_synth, self.disc_synth_opt, self.disc_synth_grads = None, None, None
+
+
         self.batch_size = batch_size
+        self.setup_model(batch_size)
 
-        self.gan_loss = tf.keras.losses.MSE
 
-        self.encoder = self.init_encoder()
-        self.decoder_real = self.init_decoder()
-        self.decoder_synth = self.init_decoder()
-
-        self.gen_dec_r, self.gen_dec_r_opt, self.gen_dec_r_grads = self.init_generator(encoder=self.encoder, decoder=self.decoder_real)
-        self.gen_dec_s, self.gen_dec_s_opt, self.gen_dec_s_grads = self.init_generator(encoder=self.encoder, decoder=self.decoder_synth)
-        
-        self.gen_comb_dec_r, self.gen_comb_dec_r_opt, self.gen_comb_dec_r_grads = self.init_generator(  encoder=self.encoder, 
-                                                                                                        decoder=self.decoder_real, 
-                                                                                                        combine_inputs=True)
-        self.gen_comb_dec_s, self.gen_comb_dec_s_opt, self.gen_comb_dec_s_grads = self.init_generator(  encoder=self.encoder, 
-                                                                                                        decoder=self.decoder_synth, 
-                                                                                                        combine_inputs=True)
-
-        self.disc_real, self.disc_real_opt, self.disc_real_grads = self.init_discriminator()
-        self.disc_synth, self.disc_synth_opt, self.disc_synth_grads = self.init_discriminator()
-
-        self.checkpoint_path = "./checkpoints/train"
         self.ckpt, self.ckpt_manager = self.define_checkpoints()
 
-    
-    def define_checkpoints(self):
-        ckpt = tf.train.Checkpoint( generator_decoder_real=self.gen_dec_r, 
-                                    generator_decoder_synth=self.gen_dec_r, 
-                                    generator_combined_decoder_real=self.gen_comb_dec_r, 
-                                    generator_combined_decoder_synth=self.gen_comb_dec_s, 
-                                    disc_real=self.disc_real,
-                                    disc_synth=self.disc_synth,
-                                    generator_decoder_real_optimizer=self.gen_dec_r_opt, 
-                                    generator_decoder_synth_optimizer=self.gen_dec_s_opt, 
-                                    generator_combined_decoder_real_optimizer=self.gen_comb_dec_r_opt, 
-                                    generator_combined_decoder_synth_optimizer=self.gen_comb_dec_s_opt)
 
-        ckpt_manager = tf.train.CheckpointManager(ckpt, self.checkpoint_path, max_to_keep=5)
+    def setup_model(self, batch_size):
+        if not self.gen_real:
+            self.gen_real, self.gen_real_opt, self.gen_real_grads = self.init_generator(self.encoder, self.decoder_real, batch_size)
+
+        if not self.gen_synth:
+            self.gen_synth, self.gen_synth_opt, self.gen_synth_grads = self.init_generator(self.encoder, self.decoder_synth, batch_size)
+
+        if not self.disc_real:
+            self.disc_real, self.disc_real_opt, self.disc_real_grads = self.init_discriminator()
+
+        if not self.disc_synth:
+            self.disc_synth, self.disc_synth_opt, self.disc_synth_grads = self.init_discriminator()
+
+    
+    def define_checkpoints(self, path='./checkpoints/train'):
+        ckpt = tf.train.Checkpoint(generator_real=self.gen_real, 
+                                   generator_synth=self.gen_real, 
+                                   generator_real_optimizer=self.gen_real_opt, 
+                                   generator_synth_optimizer=self.gen_synth_opt, 
+                                   discriminator_real=self.disc_real,
+                                   discriminator_synth=self.disc_synth,
+                                   discriminator_real_optimizer=self.disc_real_opt,
+                                   discriminator_synth_optimizer=self.disc_synth_opt)
+
+        ckpt_manager = tf.train.CheckpointManager(ckpt, path, max_to_keep=1)
 
         return ckpt, ckpt_manager
 
@@ -58,167 +64,38 @@ class PuppetGAN:
     def restore_checkpoint(self):
         if self.ckpt_manager.latest_checkpoint:
             self.ckpt.restore(self.ckpt_manager.latest_checkpoint)
-            print ('Latest checkpoint restored!')        
+            print('Latest checkpoint restored!')        
 
 
-    def init_generator(self, encoder, decoder, combine_inputs=False, lr=2e-4, beta_1=.5):
-        generator = self.create_generator(encoder, decoder)
+    def init_generator(self, encoder, decoder, batch_size, lr=2e-4, beta_1=.5):
+        generator = m.generator(encoder, decoder, batch_size)
         optimizer = tf.keras.optimizers.Adam(lr, beta_1=beta_1)
         gradients = None
 
         return generator, optimizer, gradients
 
 
-    def init_discriminator(self):
-        discriminator = self.create_discriminator()
-        optimizer = tf.keras.optimizers.Adam(2e-4, beta_1=0.5)
+    def init_discriminator(self, lr=2e-4, beta_1=.5, target=False):
+        discriminator = m.pix2pix_discriminator(target=target)
+        optimizer = tf.keras.optimizers.Adam(lr, beta_1=beta_1)
         gradients = None
 
         return discriminator, optimizer, gradients
 
 
-    def init_encoder(self, norm_type='batchnorm', use_bottleneck=True):
-        encoder = [
-            models.downsample(64, 4, norm_type, apply_norm=False),  # (bs, 128, 128, 64)
-            models.downsample(128, 4, norm_type),  # (bs, 64, 64, 128)
-            models.downsample(256, 4, norm_type),  # (bs, 32, 32, 256)
-            models.downsample(512, 4, norm_type),  # (bs, 16, 16, 512)
-            models.downsample(512, 4, norm_type),  # (bs, 8, 8, 512)
-            models.downsample(512, 4, norm_type),  # (bs, 4, 4, 512)
-            models.downsample(512, 4, norm_type),  # (bs, 2, 2, 512)
-            # models.downsample(512, 4, norm_type),  # (bs, 1, 1, 512)
-        ]
-
-        bottleneck = None
-        if use_bottleneck:
-            bottleneck = models.bottleneck()
-            
-        return encoder, bottleneck
-
-
-    def init_decoder(self, norm_type='batchnorm'):
-        return [
-            # models.upsample(512, 4, norm_type, apply_dropout=True),  # (bs, 2, 2, 1024)
-            models.upsample(512, 4, norm_type, apply_dropout=True),  # (bs, 4, 4, 1024)
-            models.upsample(512, 4, norm_type, apply_dropout=True),  # (bs, 8, 8, 1024)
-            models.upsample(512, 4, norm_type),  # (bs, 16, 16, 1024)
-            models.upsample(256, 4, norm_type),  # (bs, 32, 32, 512)
-            models.upsample(128, 4, norm_type),  # (bs, 64, 64, 256)
-            models.upsample(64, 4, norm_type),  # (bs, 128, 128, 128)
-        ]
-
-
-    def create_generator(self, encoder, decoder, combine_inputs=False, **kwargs):
-        if 'norm_type' not in kwargs:
-            kwargs['norm_type'] = 'batchnorm'  # 'instancenorm'
-
-        if not combine_inputs:
-            generator = models.generator_single(    encoder=encoder, 
-                                                    decoder=decoder, 
-                                                    batch_size=self.batch_size, 
-                                                    norm_type=kwargs['norm_type'])
-        else:
-            generator = models.generator_combined(  encoder=encoder, 
-                                                    decoder=decoder, 
-                                                    batch_size=self.batch_size, 
-                                                    norm_type=kwargs['norm_type'])
-
-
-        return generator
-
-
-    def create_discriminator(self, discriminator_type='pix2pix', **kwargs):
-        if discriminator_type == 'pix2pix':
-            if 'norm_type' not in kwargs:
-                kwargs['norm_type'] = 'batchnorm'
-
-            if 'target' not in kwargs:
-                kwargs['target'] = False
-
-            discriminator = models.pix2pix_discriminator(   norm_type=kwargs['norm_type'], 
-                                                            target=kwargs['target'])
-        else:
-            raise NotImplementedError
-
-
-        return discriminator
+    def generator_loss(self, generated):
+        return self.gan_loss(tf.ones_like(generated), generated)
 
 
     def discriminator_loss(self, real, generated, weight=.5):
-        real_loss = self.gan_loss(tf.ones_like(real), real)
-        generated_loss = self.gan_loss(tf.zeros_like(generated), generated)
+        loss_real = self.gan_loss(tf.ones_like(real), real)
+        loss_generated = self.gan_loss(tf.zeros_like(generated), generated)
 
-        total_disc_loss = real_loss + generated_loss
-
-        return weight * total_disc_loss
+        return weight * (loss_real + loss_generated)
 
 
-    def l_p_loss(self, real, generated, p=2, weight=1):
+    def lp_loss(self, real, generated, p=1, weight=1):
         return weight * tf.norm((real - generated), ord=p)
-
-
-    def make_noisy(self, img, mean=0., stddev=1., dtype=tf.dtypes.float32, seed=None, name=None):
-        noise = tf.random.normal(   img.shape, 
-                                    mean=mean, 
-                                    stddev=stddev, 
-                                    dtype=dtype, 
-                                    seed=seed, 
-                                    name=name)
-
-        return img + noise
-
-
-    def normalize(self, img):
-        '''
-            Normalizing the images to [-1, 1]. 
-        '''
-        img = tf.cast(img, tf.float32)
-        img = (img / 127.5) - 1
-        
-        return img
-
-
-    def denormalize(self, img):
-        return ((img + 1) * 127.5) / 255
-
-
-    def split_to_attributes(self, img):
-        window = int(img.shape[1] / 3)
-
-        rest = img[:, :window, :window, :]
-        attr = img[:, window:2*window, :window, :]
-        both = img[:, 2*window:, :window, :]
-
-        return attr, rest, both
-
-
-    def get_batch_flow(self, generator, path, target_size):
-        return generator.flow_from_directory(   path, 
-                                                target_size=target_size, 
-                                                batch_size=self.batch_size, 
-                                                shuffle=True, 
-                                                class_mode=None)
-
-
-    def save(self, b1, b2, b3, b3_hat_dis, batch, epoch, remove_existing=True):
-        base_path = './results/'
-        save_path = f'{base_path}disentangled/epoch_{epoch}/'
-
-        if remove_existing:
-            if os.path.exists(base_path):
-                shutil.rmtree(base_path)
-        
-        if not os.path.exists(save_path):
-            os.makedirs(save_path)
-
-        for i, (b1_, b2_, b3_, b3_hat_dis_) in enumerate(zip(b1, b2, b3, b3_hat_dis)):
-            top = np.concatenate((b1_.numpy(), b2_.numpy()), axis=1)
-            bottom = np.concatenate((b3_.numpy(), b3_hat_dis_.numpy()), axis=1)
-
-            img = np.concatenate((top, bottom), axis=0)
-            img = self.denormalize(img)
-
-            plt.imsave(f'{save_path}{batch}_{i}.png', img)
 
 
     @tf.function
@@ -226,186 +103,194 @@ class PuppetGAN:
         losses, generated_images = {}, {}
 
         with tf.GradientTape(persistent=True) as tape:
-            # persistent=True because the tape is used more than once to calculate the gradients
+            reconstruction_loss, reconstruction_weight = 0, 1
+            disentanglement_loss, dissentaglement_weight = 0, 10
+            cycle_loss, cycle_weight = 0, 1
+            attr_cycle_loss, attr_cycle_weight = 0, 1
 
-            total_discriminator_loss_real, total_discriminator_loss_synth = 0, 0
-
-            # Reconstruction Loss            
-            a_hat = self.gen_dec_r(a, training=True)
-            generated_images['reconstructed a'] = a_hat
-
-            reconstruction_loss_a = self.l_p_loss(a, a_hat, p=1)
-            total_discriminator_loss_real += self.discriminator_loss(real=self.disc_real(a), generated=self.disc_real(a_hat))
-
-
-            b1_hat = self.gen_dec_s(b1, training=True)
-            generated_images['reconstructed b1'] = b1_hat
-
-            reconstruction_loss_b1 = self.l_p_loss(b1, b1_hat, p=1)
-            total_discriminator_loss_synth += self.discriminator_loss(real=self.disc_synth(b1), generated=self.disc_synth(b1_hat))
+            gen_real_loss = 0
+            gen_synth_loss = 0
+            disc_real_loss = 0
+            disc_synth_loss = 0
 
 
-            b2_hat = self.gen_dec_s(b2, training=True)
-            generated_images['reconstructed b2'] = b2_hat
+            # Reconstruction Loss
+            a_hat = self.gen_real(a, training=True)
 
-            reconstruction_loss_b2 = self.l_p_loss(b2, b2_hat, p=1)
-            total_discriminator_loss_synth += self.discriminator_loss(real=self.disc_synth(b2), generated=self.disc_synth(b2_hat))
+            reconstruction_loss += self.lp_loss(a, a_hat)
+            gen_real_loss += self.generator_loss(self.disc_real(a_hat))
+            disc_real_loss += self.discriminator_loss(self.disc_real(a), self.disc_real(a_hat))
 
+            b1_hat = self.gen_synth(b1, training=True)
 
-            b3_hat_rec = self.gen_dec_s(b3, training=True)
-            generated_images['reconstructed b3'] = b3_hat_rec
+            reconstruction_loss += self.lp_loss(b1, b1_hat)
+            gen_synth_loss += self.generator_loss(self.disc_synth(b1_hat))
+            disc_synth_loss += self.discriminator_loss(self.disc_synth(b1), self.disc_synth(b1_hat))
 
-            reconstruction_loss_b3 = self.l_p_loss(b3, b3_hat_rec, p=1)
-            total_discriminator_loss_synth += self.discriminator_loss(real=self.disc_synth(b3), generated=self.disc_synth(b3_hat_rec))
+            b2_hat = self.gen_synth(b2, training=True)
 
+            reconstruction_loss += self.lp_loss(b2, b2_hat)
+            gen_synth_loss += self.generator_loss(self.disc_synth(b2_hat))
+            disc_synth_loss += self.discriminator_loss(self.disc_synth(b2), self.disc_synth(b2_hat))
 
-            total_reconstruction_loss =     reconstruction_loss_a   \
-                                        +   reconstruction_loss_b1  \
-                                        +   reconstruction_loss_b2  \
-                                        +   reconstruction_loss_b3
-            losses['recostruction'] = total_reconstruction_loss
+            b3_hat_rec = self.gen_synth(b3, training=True)
 
+            reconstruction_loss += self.lp_loss(b3, b3_hat_rec)
+            gen_synth_loss += self.generator_loss(self.disc_synth(b3_hat_rec))
+            disc_synth_loss += self.discriminator_loss(self.disc_synth(b3), self.disc_synth(b3_hat_rec))
 
-            # Dissentaglement Loss
-            b3_hat_dis = self.gen_comb_dec_s([b2, b1], training=True)
-            generated_images['disentangled b3'] = b3_hat_dis
+            reconstruction_loss *= reconstruction_weight
 
-            disentanglement_loss_b3 = self.l_p_loss(b3, b3_hat_dis, p=1)
-            total_discriminator_loss_synth += self.discriminator_loss(real=self.disc_synth(b3), generated=self.disc_synth(b3_hat_dis))
             
+            # Dissentaglement Loss
+            b3_hat_dis = self.gen_synth([b2, b1], training=True)
 
-            total_disentanglement_loss = disentanglement_loss_b3
-            losses['disentanglement'] = total_disentanglement_loss
+            disentanglement_loss += 10 * self.lp_loss(b3, b3_hat_dis)
+            gen_synth_loss += self.generator_loss(self.disc_synth(b3_hat_dis))
+            disc_synth_loss += self.discriminator_loss(self.disc_synth(b3), self.disc_synth(b3_hat_dis))
+
+            disentanglement_loss *= dissentaglement_weight
 
 
             # Cycle Loss
-            b_cycled_tilde = self.gen_dec_s(a, training=True)
-            b_cycled_tilde = self.make_noisy(b_cycled_tilde)
-            a_cycled_hat = self.gen_dec_r(b_cycled_tilde, training=True)
-            generated_images['cycled b tilde'] = b_cycled_tilde
-            generated_images['cycled a hat'] = a_cycled_hat
+            b_cycled_tilde = self.gen_synth(a, training=True)
+            b_cycled_tilde_noisy = utils.make_noisy(b_cycled_tilde, stddev=self.noise_std)
+            a_cycled_hat = self.gen_real(b_cycled_tilde_noisy, training=True)
 
-            cycle_loss_a = self.l_p_loss(a, a_cycled_hat, p=1)
-            total_discriminator_loss_real += self.discriminator_loss(real=self.disc_real(a), generated=self.disc_real(a_cycled_hat))
-            total_discriminator_loss_synth += self.discriminator_loss(real=self.disc_synth(b1), generated=self.disc_synth(b_cycled_tilde))
+            cycle_loss += self.lp_loss(a, a_cycled_hat)
+            gen_real_loss += self.generator_loss(self.disc_real(a_cycled_hat))
+            gen_synth_loss += self.generator_loss(self.disc_synth(b_cycled_tilde))
+            disc_real_loss += self.discriminator_loss(self.disc_real(a), self.disc_real(a_cycled_hat))
+            disc_synth_loss += self.discriminator_loss(self.disc_synth(b1), self.disc_synth(b_cycled_tilde))
 
+            a1_cycled_tilde = self.gen_real(b1, training=True)
+            a1_cycled_tilde_noisy = utils.make_noisy(a1_cycled_tilde, stddev=self.noise_std)
+            b1_cycled_hat = self.gen_synth(a1_cycled_tilde_noisy, training=True)
 
-            a1_cycled_tilde = self.gen_dec_r(b1, training=True)
-            a1_cycled_tilde = self.make_noisy(a1_cycled_tilde)
-            b1_cycled_hat = self.gen_dec_s(a1_cycled_tilde, training=True)
+            cycle_loss += self.lp_loss(b1, b1_cycled_hat)
+            gen_real_loss += self.generator_loss(self.disc_real(a1_cycled_tilde))
+            gen_synth_loss += self.generator_loss(self.disc_synth(b1_cycled_hat))
+            disc_real_loss += self.discriminator_loss(self.disc_real(a), self.disc_real(a1_cycled_tilde))
+            disc_synth_loss += self.discriminator_loss(self.disc_synth(b1), self.disc_synth(b1_cycled_hat))
 
-            cycle_loss_b1 = self.l_p_loss(b1, b1_cycled_hat, p=1)
-            total_discriminator_loss_real += self.discriminator_loss(real=self.disc_real(a), generated=self.disc_real(a1_cycled_tilde))
-            total_discriminator_loss_synth += self.discriminator_loss(real=self.disc_synth(b1), generated=self.disc_synth(b1_cycled_hat))
+            a2_cycled_tilde = self.gen_real(b2, training=True)
+            a2_cycled_tilde_noisy = utils.make_noisy(a2_cycled_tilde, stddev=self.noise_std)
+            b2_cycled_hat = self.gen_synth(a2_cycled_tilde_noisy, training=True)
 
+            cycle_loss += self.lp_loss(b2, b2_cycled_hat)
+            gen_real_loss += self.generator_loss(self.disc_real(a2_cycled_tilde))
+            gen_synth_loss += self.generator_loss(self.disc_synth(b2_cycled_hat))
+            disc_real_loss += self.discriminator_loss(self.disc_real(a), self.disc_real(a2_cycled_tilde))
+            disc_synth_loss += self.discriminator_loss(self.disc_synth(b2), self.disc_synth(b2_cycled_hat))
 
-            a2_cycled_tilde = self.gen_dec_r(b2, training=True)
-            a2_cycled_tilde = self.make_noisy(a2_cycled_tilde)
-            b2_cycled_hat = self.gen_dec_s(a2_cycled_tilde, training=True)
+            a3_cycled_tilde = self.gen_real(b3, training=True)
+            a3_cycled_tilde_noisy = utils.make_noisy(a3_cycled_tilde, stddev=self.noise_std)
+            b3_cycled_hat = self.gen_synth(a3_cycled_tilde_noisy, training=True)
 
-            cycle_loss_b2 = self.l_p_loss(b2, b2_cycled_hat, p=1)
-            total_discriminator_loss_real += self.discriminator_loss(real=self.disc_real(a), generated=self.disc_real(a2_cycled_tilde))
-            total_discriminator_loss_synth += self.discriminator_loss(real=self.disc_synth(b2), generated=self.disc_synth(b2_cycled_hat))
+            cycle_loss += self.lp_loss(b3, b3_cycled_hat)
+            gen_real_loss += self.generator_loss(self.disc_real(a3_cycled_tilde))
+            gen_synth_loss += self.generator_loss(self.disc_synth(b3_cycled_hat))
+            disc_real_loss += self.discriminator_loss(self.disc_real(a), self.disc_real(a3_cycled_tilde))
+            disc_synth_loss += self.discriminator_loss(self.disc_synth(b3), self.disc_synth(b3_cycled_hat))
 
-
-            a3_cycled_tilde = self.gen_dec_r(b3, training=True)
-            a3_cycled_tilde = self.make_noisy(a3_cycled_tilde)
-            b3_cycled_hat = self.gen_dec_s(a3_cycled_tilde, training=True)
-
-            cycle_loss_b3 = self.l_p_loss(b3, b3_cycled_hat, p=1)
-            total_discriminator_loss_real += self.discriminator_loss(real=self.disc_real(a), generated=self.disc_real(a3_cycled_tilde))
-            total_discriminator_loss_synth += self.discriminator_loss(real=self.disc_synth(b3), generated=self.disc_synth(b3_cycled_hat))
-
-            
-            total_cycle_loss = cycle_loss_a + cycle_loss_b1 + cycle_loss_b2 + cycle_loss_b3
-            losses['cycle'] = total_cycle_loss
+            cycle_loss *= cycle_weight
 
 
             # Attribute Cycle Loss
-            a_tilde = self.gen_comb_dec_r([a, b1], training=True)
-            a_tilde = self.make_noisy(a_tilde)
-            b3_hat_star = self.gen_comb_dec_s([b2, a_tilde], training=True)
-            generated_images['a tilde'] = a_tilde
-            generated_images['b3 hat star'] = b3_hat_star
+            a_tilde = self.gen_real([a, b1], training=True)
+            a_tilde_noisy = utils.make_noisy(a_tilde, stddev=self.noise_std)
+            b3_hat_star = self.gen_synth([b2, a_tilde_noisy], training=True)
 
-            attr_cycle_loss_b3 = self.l_p_loss(b3, b3_hat_star, p=1)
-            total_discriminator_loss_real += self.discriminator_loss(real=self.disc_real(a), generated=self.disc_real(a_tilde))
-            total_discriminator_loss_synth += self.discriminator_loss(real=self.disc_synth(b3), generated=self.disc_synth(b3_hat_star))
+            attr_cycle_loss += self.lp_loss(b3, b3_hat_star)
+            gen_real_loss += self.generator_loss(self.disc_real(a_tilde))
+            gen_synth_loss += self.generator_loss(self.disc_synth(b3_hat_star))
+            disc_real_loss += self.discriminator_loss(self.disc_real(a), self.disc_real(a_tilde))
+            disc_synth_loss += self.discriminator_loss(self.disc_synth(b3), self.disc_synth(b3_hat_star))
+
+            b_tilde = self.gen_synth([b1, a], training=True)
+            b_tilde_noisy = utils.make_noisy(b_tilde, stddev=self.noise_std)
+            a_hat_star = self.gen_real([a, b_tilde_noisy], training=True)
+
+            attr_cycle_loss += self.lp_loss(a, a_hat_star)
+            gen_real_loss += self.generator_loss(self.disc_real(a_hat_star))
+            gen_synth_loss += self.generator_loss(self.disc_synth(b_tilde))
+            disc_real_loss += self.discriminator_loss(self.disc_real(a), self.disc_real(a_hat_star))
+            disc_synth_loss += self.discriminator_loss(self.disc_synth(b1), self.disc_synth(b_tilde))
+
+            attr_cycle_loss *= attr_cycle_weight
 
 
-            b_tilde = self.gen_comb_dec_s([b1, a], training=True)
-            b_tilde = self.make_noisy(b_tilde)
-            a_hat_star = self.gen_comb_dec_r([a, b_tilde], training=True)
-            generated_images['b tilde'] = b_tilde
-            generated_images['a hat star'] = a_hat_star
+            losses['reconstruction'] = reconstruction_loss / reconstruction_weight
+            losses['disentanglement'] = disentanglement_loss / dissentaglement_weight
+            losses['cycle'] = cycle_loss / cycle_weight
+            losses['attribute cycle'] = attr_cycle_loss / attr_cycle_weight
 
-            attr_cycle_loss_a = self.l_p_loss(a, a_hat_star, p=1)
-            total_discriminator_loss_real += self.discriminator_loss(real=self.disc_real(a), generated=self.disc_real(a_hat_star))
-            total_discriminator_loss_synth += self.discriminator_loss(real=self.disc_synth(b1), generated=self.disc_synth(b_tilde))
-
-
-            total_attr_cycle_loss = attr_cycle_loss_b3 + attr_cycle_loss_a
-            losses['attribute cycle'] = total_attr_cycle_loss
-
+            losses['generator real'] = gen_real_loss
+            losses['generator synth'] = gen_synth_loss
+            losses['discriminator real'] = disc_real_loss
+            losses['discriminator synth'] = disc_synth_loss
 
             # Supervised Losses per Generator
-            total_gen_dec_r_loss = reconstruction_loss_a + total_cycle_loss
-            total_gen_dec_s_loss = reconstruction_loss_b1 + reconstruction_loss_b2 + reconstruction_loss_b3 + total_cycle_loss
-            total_gen_comb_dec_r_loss = total_attr_cycle_loss
-            total_gen_comb_dec_s_loss = total_disentanglement_loss + total_attr_cycle_loss
-
-            losses['generator with real encoder'] = total_gen_dec_r_loss
-            losses['generator with synthetic encoder'] = total_gen_dec_s_loss
-            losses['combined generator with real encoder'] = total_gen_comb_dec_r_loss
-            losses['combined generator with synthetic encoder'] = total_gen_comb_dec_s_loss
-
-            losses['real discriminator'] = total_discriminator_loss_real
-            losses['synthetic discriminator'] = total_discriminator_loss_synth
+            gen_real_loss += reconstruction_loss + cycle_loss + attr_cycle_loss
+            gen_synth_loss += reconstruction_loss + disentanglement_loss + cycle_loss + attr_cycle_loss
 
 
         # Calculate the Gradients
-        self.gen_dec_r_grads = tape.gradient(total_gen_dec_r_loss, self.gen_dec_r.trainable_variables)
-        self.gen_dec_s_grads = tape.gradient(total_gen_dec_s_loss, self.gen_dec_s.trainable_variables)
-        
-        self.gen_comb_dec_r_grads = tape.gradient(total_gen_comb_dec_r_loss, self.gen_comb_dec_r.trainable_variables)
-        self.gen_comb_dec_s_grads = tape.gradient(total_gen_comb_dec_s_loss, self.gen_comb_dec_s.trainable_variables)
+        self.gen_real_grads = tape.gradient(gen_real_loss, self.gen_real.trainable_variables)
+        self.gen_synth_grads = tape.gradient(gen_synth_loss, self.gen_synth.trainable_variables)
 
-        self.disc_real_grads = tape.gradient(total_discriminator_loss_real, self.disc_real.trainable_variables)
-        self.disc_synth_grads = tape.gradient(total_discriminator_loss_synth, self.disc_synth.trainable_variables)
-
+        self.disc_real_grads = tape.gradient(disc_real_loss, self.disc_real.trainable_variables)
+        self.disc_synth_grads = tape.gradient(disc_synth_loss, self.disc_synth.trainable_variables)
 
         # Apply the Gradients to the Optimizers
-        self.gen_dec_r_opt.apply_gradients(zip(self.gen_dec_r_grads, self.gen_dec_r.trainable_variables))
-        self.gen_dec_s_opt.apply_gradients(zip(self.gen_dec_s_grads, self.gen_dec_s.trainable_variables))
-        
-        self.gen_comb_dec_r_opt.apply_gradients(zip(self.gen_comb_dec_r_grads, self.gen_comb_dec_r.trainable_variables))
-        self.gen_comb_dec_s_opt.apply_gradients(zip(self.gen_comb_dec_s_grads, self.gen_comb_dec_s.trainable_variables))
+        self.gen_real_opt.apply_gradients(zip(self.gen_real_grads, self.gen_real.trainable_variables))
+        self.gen_synth_opt.apply_gradients(zip(self.gen_synth_grads, self.gen_synth.trainable_variables))
 
         self.disc_real_opt.apply_gradients(zip(self.disc_real_grads, self.disc_real.trainable_variables))
         self.disc_synth_opt.apply_gradients(zip(self.disc_synth_grads, self.disc_synth.trainable_variables))
 
+        return losses, {
+                            'reconstructed a' : a_hat, 
+                            'reconstructed b1' : b1_hat, 
+                            'reconstructed b2' : b2_hat, 
+                            'reconstructed b3' : b3_hat_rec, 
+                                
+                            'disentangled b3' : b3_hat_dis, 
+                                
+                            'cycled a' : a_cycled_hat, 
+                            'cycle b tilde' : b_cycled_tilde, 
+                            'cycled b1' : b1_cycled_hat, 
+                            'cycle a1 tilde' : a1_cycled_tilde, 
+                            'cycled b2' : b2_cycled_hat, 
+                            'cycle a2 tilde' : a2_cycled_tilde, 
+                            'cycled b3' : b3_cycled_hat, 
+                            'cycle a3 tilde' : a3_cycled_tilde, 
+                                
+                            'attr cycle a tilde' : a_tilde, 
+                            'attr cycled b3' : b3_hat_star, 
+                            'attr cycle b tilde' : b_tilde, 
+                            'attr cycled a' : a_hat_star
+                        }
 
-        return losses, generated_images
 
+    def fit(self, 
+            path_real, 
+            path_synth, 
+            img_size=(128, 128), 
+            epochs=500, 
+            save_model_every=100, 
+            save_images_every=1):
 
-    def train(  self, 
-                path_real, 
-                path_synth, 
-                img_size=(128, 128), 
-                epochs=50, 
-                save_model_every=5, 
-                save_images_every=5):
-        data_generator = tf.keras.preprocessing.image.ImageDataGenerator()
+        losses = np.empty((0, 8), float)
 
-        # train
         for epoch in range(epochs):
-            print(f'\nEpoch: {epoch+1} / {epochs}')
-            
             start = time()
-            losses = np.zeros([4])
+            print(f'\nEpoch: {epoch} / {epochs}')
 
-            data_real = self.get_batch_flow(data_generator, path_real, img_size)
-            data_synth = self.get_batch_flow(data_generator, path_synth, tuple(3*dim for dim in img_size))
+            epoch_losses = np.zeros([8])
+
+            data_real = utils.get_batch_flow(path_real, img_size, self.batch_size)
+            data_synth = utils.get_batch_flow(path_synth, tuple(3*dim for dim in img_size), self.batch_size)
 
             n_batches_real = len(data_real) if len(data_real) % self.batch_size == 0 else len(data_real) - 1
 
@@ -415,39 +300,42 @@ class PuppetGAN:
             for i, (a, b) in enumerate(zip(data_real, data_synth)):
                 print(f'\tBatch: {i+1} / {n_batches_real}\r', end='')
 
-                a = self.normalize(a)
-                b = self.normalize(b)
+                a = utils.normalize(a)
+                b = utils.normalize(b)
 
-                b1, b2, b3 = self.split_to_attributes(b)
+                b1, b2, b3 = utils.split_to_attributes(b)
 
                 batch_losses, generated_images = self.train_step(a, b1, b2, b3)
                 batch_losses = [
-                    batch_losses['recostruction'], 
+                    batch_losses['reconstruction'], 
                     batch_losses['disentanglement'], 
                     batch_losses['cycle'], 
-                    batch_losses['attribute cycle']
+                    batch_losses['attribute cycle'], 
+                    batch_losses['generator real'], 
+                    batch_losses['generator synth'], 
+                    batch_losses['discriminator real'], 
+                    batch_losses['discriminator synth']
                 ]
 
-                losses = np.add(losses, batch_losses)
+                epoch_losses = np.add(epoch_losses, batch_losses)
 
+            epoch_losses = epoch_losses / n_batches_real
+            losses = np.append(losses, [epoch_losses], axis=0)
 
             # save only the images from the last batch to save space
             if save_images_every:
-                if epoch % save_images_every == 0:
-                    self.save(b1, b2, b3, generated_images['disentangled b3'], i, epoch, remove_existing=False)
+                if epoch % save_images_every == 0 or epoch + 1 == epochs:
+                    utils.plot_losses(losses)
+                    utils.save(a, b1, b2, b3, generated_images, i, epoch, remove_existing=False)
+                    print(f'\n\tSaved losses and images for epoch {epoch}!\n')
 
-            losses = losses / n_batches_real
+            if save_model_every:
+                if epoch % save_model_every == 0 or epoch + 1 == epochs:
+                    ckpt_path = self.ckpt_manager.save()
+                    print(f'\tSaving checkpoint for epoch {epoch} at {ckpt_path}\n')
 
-            if save_model_every and epoch % save_model_every == 0:
-                ckpt_path = self.ckpt_manager.save()
-                print(f'\tSaving checkpoint for epoch {epoch+1} at {ckpt_path}\n')
-
-            print(f'\tReconstruction Loss:\t{losses[0]}')
-            print(f'\tDisentanglement Loss:\t{losses[1]}')
-            print(f'\tCycle Loss:\t\t{losses[2]}')
-            print(f'\tAttribute Cycle Loss:\t{losses[3]}')
-
-            print(f'\n\tTime taken for epoch {epoch+1}: {time()-start}sec.')
+            utils.print_losses(epoch_losses)
+            print(f'\n\tTime taken for epoch {epoch}: {time()-start}sec.')
 
 
 

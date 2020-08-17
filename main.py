@@ -2,23 +2,27 @@ import puppetGAN as puppet
 
 
 
-FACES_REAL_PATH = 'data/dummy/real_'
-FACES_SYNTH_PATH = 'data/dummy/synth_'
-
-IMG_SIZE = (128, 128)
-IMG_SIZE_SYNTH = (3*128, 3*128)
-BATCH_SIZE = 50
-
-EPOCHS = 40
+DATASET = 'faces'
+EPOCHS = 500
 
 
 
 if __name__ == '__main__':
-    puppet_GAN = puppet.PuppetGAN(BATCH_SIZE)
+    dataset = DATASET.lower()
+    assert dataset in ['faces', 'digits']
+    
+    batch_size, img_size, save_images_every = (50, (128, 128), 50) if dataset == 'faces' else (200, (32, 32), 50)
+
+    faces_real_path = f'data/{dataset}/real_'
+    faces_synth_path = f'data/{dataset}/synth_'
+
+    puppet_GAN = puppet.PuppetGAN(batch_size)
     puppet_GAN.restore_checkpoint()
-    puppet_GAN.train(   path_real=FACES_REAL_PATH, 
-                        path_synth=FACES_SYNTH_PATH, 
-                        epochs=EPOCHS)
+    puppet_GAN.fit(path_real=faces_real_path, 
+                   path_synth=faces_synth_path, 
+                   epochs=EPOCHS, 
+                   img_size=img_size, 
+                   save_images_every=save_images_every)
 
 
 
