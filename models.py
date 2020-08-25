@@ -7,17 +7,17 @@ import numpy as np
 from tensorflow import split, reshape, random_normal_initializer
 from tensorflow.keras import Sequential, Model
 from tensorflow.keras.layers import (
-    concatenate, 
-    Input, 
-    Dense, 
-    Conv2D, 
-    Conv2DTranspose, 
-    ZeroPadding2D, 
-    Dropout, 
-    BatchNormalization, 
-    ReLU, 
-    LeakyReLU, 
-    Flatten, 
+    concatenate,
+    Input,
+    Dense,
+    Conv2D,
+    Conv2DTranspose,
+    ZeroPadding2D,
+    Dropout,
+    BatchNormalization,
+    ReLU,
+    LeakyReLU,
+    Flatten,
     GaussianNoise
 )
 
@@ -27,11 +27,11 @@ def downsample(filters, size, apply_norm=True):
     initializer = random_normal_initializer(0., 0.02)
 
     result = Sequential()
-    result.add(Conv2D(filters, 
-                      size, 
-                      strides=2, 
-                      padding='same', 
-                      kernel_initializer=initializer, 
+    result.add(Conv2D(filters,
+                      size,
+                      strides=2,
+                      padding='same',
+                      kernel_initializer=initializer,
                       use_bias=False))
 
     if apply_norm:
@@ -46,11 +46,11 @@ def upsample(filters, size, apply_dropout=False):
     initializer = random_normal_initializer(0., 0.02)
 
     result = Sequential()
-    result.add(Conv2DTranspose(filters, 
-                               size, 
-                               strides=2, 
-                               padding='same', 
-                               kernel_initializer=initializer, 
+    result.add(Conv2DTranspose(filters,
+                               size,
+                               strides=2,
+                               padding='same',
+                               kernel_initializer=initializer,
                                use_bias=False))
 
     result.add(BatchNormalization())
@@ -86,7 +86,7 @@ def get_encoder(noise_std=.01):
     ]
 
     bottleneck = get_bottleneck(dim=128, noise_std=noise_std)
-        
+
     return encoder, bottleneck
 
 
@@ -98,52 +98,34 @@ def get_decoder():
         upsample(256, 4),  # (bs, 16, 16, 512)
         upsample(128, 4),  # (bs, 32, 32, 256)
         upsample(64, 4),  # (bs, 64, 64, 128)
-        Conv2DTranspose(3, 
-                        4, 
+        Conv2DTranspose(3,
+                        4,
                         strides=2,
-                        padding='same', 
+                        padding='same',
                         kernel_initializer=random_normal_initializer(0., 0.02),
                         activation='tanh')  # (bs, 128, 128, 3)
     ]
 
 
 def generator(encoder, decoder, batch_size):
-    try:
-        inputs = Input(shape=[128, 128, 3], batch_size=batch_size)
-    except:
-        inputs = Input(shape=[2*128, 128, 3], batch_size=batch_size)
-    
+    inputs = Input(shape=[2*128, 128, 3], batch_size=batch_size)
     encoder_, bottleneck_ = encoder
+    
+    x1, x2 = inputs[:, :128, :, :], inputs[:, 128:, :, :]
+    assert x1.get_shape().as_list() == x2.get_shape().as_list()
 
-    if inputs.shape[1] == 128:
-        x = inputs
-        
-        for down in encoder_:
-            x = down(x)
+    for down in encoder_:
+        x1 = down(x1)
+        x2 = down(x2)
 
-        encoder_output_shape = x.get_shape().as_list()
-        encoder_output_shape_no_bs = encoder_output_shape[1:]  # don't include batch size
+    encoder_output_shape = x1.get_shape().as_list()
+    encoder_output_shape_no_bs = encoder_output_shape[1:]  # don't include batch size
 
-        x = bottleneck_(x)
-        attr, rest = split(x, 2, axis=1)
-    else:
-        # combine inputs
-        x1, x2 = inputs[:, :128, :, :], inputs[:, 128:, :, :]
-        
-        assert x1.get_shape().as_list() == x2.get_shape().as_list()
+    x1 = bottleneck_(x1)
+    _, rest = split(x1, 2, axis=1)
 
-        for down in encoder_:
-            x1 = down(x1)
-            x2 = down(x2)
-
-        encoder_output_shape = x1.get_shape().as_list()
-        encoder_output_shape_no_bs = encoder_output_shape[1:]  # don't include batch size
-
-        x1 = bottleneck_(x1)
-        _, rest = split(x1, 2, axis=1)
-
-        x2 = bottleneck_(x2)
-        attr, _ = split(x2, 2, axis=1)
+    x2 = bottleneck_(x2)
+    attr, _ = split(x2, 2, axis=1)
 
     x = concatenate([attr, rest])
 
@@ -174,10 +156,10 @@ def pix2pix_discriminator(target=True):
     down3 = downsample(256, 4)(down2)  # (bs, 32, 32, 256)
 
     zero_pad1 = ZeroPadding2D()(down3)  # (bs, 34, 34, 256)
-    conv = Conv2D(512, 
-                  4, 
-                  strides=1, 
-                  kernel_initializer=initializer, 
+    conv = Conv2D(512,
+                  4,
+                  strides=1,
+                  kernel_initializer=initializer,
                   use_bias=False)(zero_pad1)  # (bs, 31, 31, 512)
 
     norm1 = BatchNormalization()(conv)
@@ -186,16 +168,12 @@ def pix2pix_discriminator(target=True):
 
     zero_pad2 = ZeroPadding2D()(leaky_relu)  # (bs, 33, 33, 512)
 
-    last = Conv2D(1, 
-                  4, 
-                  strides=1, 
+    last = Conv2D(1,
+                  4,
+                  strides=1,
                   kernel_initializer=initializer)(zero_pad2)  # (bs, 30, 30, 1)
 
     if target:
         return Model(inputs=[inp, tar], outputs=last)
-    else:
-        return Model(inputs=inp, outputs=last)
 
-
-
-
+    return Model(inputs=inp, outputs=last)

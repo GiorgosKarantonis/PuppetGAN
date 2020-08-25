@@ -1,4 +1,3 @@
-import os
 from time import time
 from itertools import islice
 
@@ -45,12 +44,12 @@ class PuppetGAN:
         if not self.disc_synth:
             self.disc_synth, self.disc_synth_opt, self.disc_synth_grads = self.init_discriminator()
 
-    
+
     def define_checkpoints(self, path='./checkpoints/train'):
-        ckpt = tf.train.Checkpoint(generator_real=self.gen_real, 
-                                   generator_synth=self.gen_real, 
-                                   generator_real_optimizer=self.gen_real_opt, 
-                                   generator_synth_optimizer=self.gen_synth_opt, 
+        ckpt = tf.train.Checkpoint(generator_real=self.gen_real,
+                                   generator_synth=self.gen_real,
+                                   generator_real_optimizer=self.gen_real_opt,
+                                   generator_synth_optimizer=self.gen_synth_opt,
                                    discriminator_real=self.disc_real,
                                    discriminator_synth=self.disc_synth,
                                    discriminator_real_optimizer=self.disc_real_opt,
@@ -64,7 +63,7 @@ class PuppetGAN:
     def restore_checkpoint(self):
         if self.ckpt_manager.latest_checkpoint:
             self.ckpt.restore(self.ckpt_manager.latest_checkpoint)
-            print('Latest checkpoint restored!')        
+            print('Latest checkpoint restored!')
 
 
     def init_generator(self, encoder, decoder, batch_size, lr=2e-4, beta_1=.5):
@@ -104,7 +103,7 @@ class PuppetGAN:
 
         with tf.GradientTape(persistent=True) as tape:
             reconstruction_loss, reconstruction_weight = 0, 1
-            disentanglement_loss, dissentaglement_weight = 0, 10
+            disentanglement_loss, dissentaglement_weight = 0, 1
             cycle_loss, cycle_weight = 0, 1
             attr_cycle_loss, attr_cycle_weight = 0, 1
 
@@ -115,25 +114,25 @@ class PuppetGAN:
 
 
             # Reconstruction Loss
-            a_hat = self.gen_real(a, training=True)
+            a_hat = self.gen_real(tf.concat([a, a], axis=1), training=True)
 
             reconstruction_loss += self.lp_loss(a, a_hat)
             gen_real_loss += self.generator_loss(self.disc_real(a_hat))
             disc_real_loss += self.discriminator_loss(self.disc_real(a), self.disc_real(a_hat))
 
-            b1_hat = self.gen_synth(b1, training=True)
+            b1_hat = self.gen_synth(tf.concat([b1, b1], axis=1), training=True)
 
             reconstruction_loss += self.lp_loss(b1, b1_hat)
             gen_synth_loss += self.generator_loss(self.disc_synth(b1_hat))
             disc_synth_loss += self.discriminator_loss(self.disc_synth(b1), self.disc_synth(b1_hat))
 
-            b2_hat = self.gen_synth(b2, training=True)
+            b2_hat = self.gen_synth(tf.concat([b2, b2], axis=1), training=True)
 
             reconstruction_loss += self.lp_loss(b2, b2_hat)
             gen_synth_loss += self.generator_loss(self.disc_synth(b2_hat))
             disc_synth_loss += self.discriminator_loss(self.disc_synth(b2), self.disc_synth(b2_hat))
 
-            b3_hat_rec = self.gen_synth(b3, training=True)
+            b3_hat_rec = self.gen_synth(tf.concat([b3, b3], axis=1), training=True)
 
             reconstruction_loss += self.lp_loss(b3, b3_hat_rec)
             gen_synth_loss += self.generator_loss(self.disc_synth(b3_hat_rec))
@@ -141,11 +140,11 @@ class PuppetGAN:
 
             reconstruction_loss *= reconstruction_weight
 
-            
-            # Dissentaglement Loss
-            b3_hat_dis = self.gen_synth([b2, b1], training=True)
 
-            disentanglement_loss += 10 * self.lp_loss(b3, b3_hat_dis)
+            # Dissentaglement Loss
+            b3_hat_dis = self.gen_synth(tf.concat([b2, b1], axis=1), training=True)
+
+            disentanglement_loss += self.lp_loss(b3, b3_hat_dis)
             gen_synth_loss += self.generator_loss(self.disc_synth(b3_hat_dis))
             disc_synth_loss += self.discriminator_loss(self.disc_synth(b3), self.disc_synth(b3_hat_dis))
 
@@ -153,9 +152,9 @@ class PuppetGAN:
 
 
             # Cycle Loss
-            b_cycled_tilde = self.gen_synth(a, training=True)
+            b_cycled_tilde = self.gen_synth(tf.concat([a, a], axis=1), training=True)
             b_cycled_tilde_noisy = utils.make_noisy(b_cycled_tilde, stddev=self.noise_std)
-            a_cycled_hat = self.gen_real(b_cycled_tilde_noisy, training=True)
+            a_cycled_hat = self.gen_real(tf.concat([b_cycled_tilde_noisy, b_cycled_tilde_noisy], axis=1), training=True)
 
             cycle_loss += self.lp_loss(a, a_cycled_hat)
             gen_real_loss += self.generator_loss(self.disc_real(a_cycled_hat))
@@ -163,9 +162,9 @@ class PuppetGAN:
             disc_real_loss += self.discriminator_loss(self.disc_real(a), self.disc_real(a_cycled_hat))
             disc_synth_loss += self.discriminator_loss(self.disc_synth(b1), self.disc_synth(b_cycled_tilde))
 
-            a1_cycled_tilde = self.gen_real(b1, training=True)
+            a1_cycled_tilde = self.gen_real(tf.concat([b1, b1], axis=1), training=True)
             a1_cycled_tilde_noisy = utils.make_noisy(a1_cycled_tilde, stddev=self.noise_std)
-            b1_cycled_hat = self.gen_synth(a1_cycled_tilde_noisy, training=True)
+            b1_cycled_hat = self.gen_synth(tf.concat([a1_cycled_tilde_noisy, a1_cycled_tilde_noisy], axis=1), training=True)
 
             cycle_loss += self.lp_loss(b1, b1_cycled_hat)
             gen_real_loss += self.generator_loss(self.disc_real(a1_cycled_tilde))
@@ -173,9 +172,9 @@ class PuppetGAN:
             disc_real_loss += self.discriminator_loss(self.disc_real(a), self.disc_real(a1_cycled_tilde))
             disc_synth_loss += self.discriminator_loss(self.disc_synth(b1), self.disc_synth(b1_cycled_hat))
 
-            a2_cycled_tilde = self.gen_real(b2, training=True)
+            a2_cycled_tilde = self.gen_real(tf.concat([b2, b2], axis=1), training=True)
             a2_cycled_tilde_noisy = utils.make_noisy(a2_cycled_tilde, stddev=self.noise_std)
-            b2_cycled_hat = self.gen_synth(a2_cycled_tilde_noisy, training=True)
+            b2_cycled_hat = self.gen_synth(tf.concat([a2_cycled_tilde_noisy, a2_cycled_tilde_noisy], axis=1), training=True)
 
             cycle_loss += self.lp_loss(b2, b2_cycled_hat)
             gen_real_loss += self.generator_loss(self.disc_real(a2_cycled_tilde))
@@ -183,9 +182,9 @@ class PuppetGAN:
             disc_real_loss += self.discriminator_loss(self.disc_real(a), self.disc_real(a2_cycled_tilde))
             disc_synth_loss += self.discriminator_loss(self.disc_synth(b2), self.disc_synth(b2_cycled_hat))
 
-            a3_cycled_tilde = self.gen_real(b3, training=True)
+            a3_cycled_tilde = self.gen_real(tf.concat([b3, b3], axis=1), training=True)
             a3_cycled_tilde_noisy = utils.make_noisy(a3_cycled_tilde, stddev=self.noise_std)
-            b3_cycled_hat = self.gen_synth(a3_cycled_tilde_noisy, training=True)
+            b3_cycled_hat = self.gen_synth(tf.concat([a3_cycled_tilde_noisy, a3_cycled_tilde_noisy], axis=1), training=True)
 
             cycle_loss += self.lp_loss(b3, b3_cycled_hat)
             gen_real_loss += self.generator_loss(self.disc_real(a3_cycled_tilde))
@@ -197,9 +196,9 @@ class PuppetGAN:
 
 
             # Attribute Cycle Loss
-            a_tilde = self.gen_real([a, b1], training=True)
+            a_tilde = self.gen_real(tf.concat([a, b1], axis=1), training=True)
             a_tilde_noisy = utils.make_noisy(a_tilde, stddev=self.noise_std)
-            b3_hat_star = self.gen_synth([b2, a_tilde_noisy], training=True)
+            b3_hat_star = self.gen_synth(tf.concat([b2, a_tilde_noisy], axis=1), training=True)
 
             attr_cycle_loss += self.lp_loss(b3, b3_hat_star)
             gen_real_loss += self.generator_loss(self.disc_real(a_tilde))
@@ -207,9 +206,9 @@ class PuppetGAN:
             disc_real_loss += self.discriminator_loss(self.disc_real(a), self.disc_real(a_tilde))
             disc_synth_loss += self.discriminator_loss(self.disc_synth(b3), self.disc_synth(b3_hat_star))
 
-            b_tilde = self.gen_synth([b1, a], training=True)
+            b_tilde = self.gen_synth(tf.concat([b1, a], axis=1), training=True)
             b_tilde_noisy = utils.make_noisy(b_tilde, stddev=self.noise_std)
-            a_hat_star = self.gen_real([a, b_tilde_noisy], training=True)
+            a_hat_star = self.gen_real(tf.concat([a, b_tilde_noisy], axis=1), training=True)
 
             attr_cycle_loss += self.lp_loss(a, a_hat_star)
             gen_real_loss += self.generator_loss(self.disc_real(a_hat_star))
@@ -250,35 +249,35 @@ class PuppetGAN:
         self.disc_synth_opt.apply_gradients(zip(self.disc_synth_grads, self.disc_synth.trainable_variables))
 
         return losses, {
-                            'reconstructed a' : a_hat, 
-                            'reconstructed b1' : b1_hat, 
-                            'reconstructed b2' : b2_hat, 
-                            'reconstructed b3' : b3_hat_rec, 
-                                
-                            'disentangled b3' : b3_hat_dis, 
-                                
-                            'cycled a' : a_cycled_hat, 
-                            'cycle b tilde' : b_cycled_tilde, 
-                            'cycled b1' : b1_cycled_hat, 
-                            'cycle a1 tilde' : a1_cycled_tilde, 
-                            'cycled b2' : b2_cycled_hat, 
-                            'cycle a2 tilde' : a2_cycled_tilde, 
-                            'cycled b3' : b3_cycled_hat, 
-                            'cycle a3 tilde' : a3_cycled_tilde, 
-                                
-                            'attr cycle a tilde' : a_tilde, 
-                            'attr cycled b3' : b3_hat_star, 
-                            'attr cycle b tilde' : b_tilde, 
-                            'attr cycled a' : a_hat_star
-                        }
+            'reconstructed a' : a_hat,
+            'reconstructed b1' : b1_hat,
+            'reconstructed b2' : b2_hat,
+            'reconstructed b3' : b3_hat_rec,
+
+            'disentangled b3' : b3_hat_dis,
+
+            'cycled a' : a_cycled_hat,
+            'cycle b tilde' : b_cycled_tilde,
+            'cycled b1' : b1_cycled_hat,
+            'cycle a1 tilde' : a1_cycled_tilde,
+            'cycled b2' : b2_cycled_hat,
+            'cycle a2 tilde' : a2_cycled_tilde,
+            'cycled b3' : b3_cycled_hat,
+            'cycle a3 tilde' : a3_cycled_tilde,
+
+            'attr cycle a tilde' : a_tilde,
+            'attr cycled b3' : b3_hat_star,
+            'attr cycle b tilde' : b_tilde,
+            'attr cycled a' : a_hat_star
+        }
 
 
-    def fit(self, 
-            path_real, 
-            path_synth, 
-            img_size=(128, 128), 
-            epochs=500, 
-            save_model_every=100, 
+    def fit(self,
+            path_real,
+            path_synth,
+            img_size=(128, 128),
+            epochs=500,
+            save_model_every=100,
             save_images_every=1):
 
         losses = np.empty((0, 8), float)
@@ -307,13 +306,13 @@ class PuppetGAN:
 
                 batch_losses, generated_images = self.train_step(a, b1, b2, b3)
                 batch_losses = [
-                    batch_losses['reconstruction'], 
-                    batch_losses['disentanglement'], 
-                    batch_losses['cycle'], 
-                    batch_losses['attribute cycle'], 
-                    batch_losses['generator real'], 
-                    batch_losses['generator synth'], 
-                    batch_losses['discriminator real'], 
+                    batch_losses['reconstruction'],
+                    batch_losses['disentanglement'],
+                    batch_losses['cycle'],
+                    batch_losses['attribute cycle'],
+                    batch_losses['generator real'],
+                    batch_losses['generator synth'],
+                    batch_losses['discriminator real'],
                     batch_losses['discriminator synth']
                 ]
 
@@ -336,7 +335,3 @@ class PuppetGAN:
 
             utils.print_losses(epoch_losses)
             print(f'\n\tTime taken for epoch {epoch}: {time()-start}sec.')
-
-
-
-
