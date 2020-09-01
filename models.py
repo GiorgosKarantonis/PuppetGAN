@@ -21,6 +21,8 @@ from tensorflow.keras.layers import (
     GaussianNoise
 )
 
+import tensorflow as tf
+
 
 
 def downsample(filters, size, apply_norm=True):
@@ -107,8 +109,8 @@ def get_decoder():
     ]
 
 
-def generator(encoder, decoder, batch_size):
-    inputs = Input(shape=[2*128, 128, 3], batch_size=batch_size)
+def generator(encoder, decoder):
+    inputs = Input(shape=[2*128, 128, 3])
     encoder_, bottleneck_ = encoder
     
     x1, x2 = inputs[:, :128, :, :], inputs[:, 128:, :, :]
@@ -118,8 +120,7 @@ def generator(encoder, decoder, batch_size):
         x1 = down(x1)
         x2 = down(x2)
 
-    encoder_output_shape = x1.get_shape().as_list()
-    encoder_output_shape_no_bs = encoder_output_shape[1:]  # don't include batch size
+    encoder_output_shape_no_bs = x1.get_shape().as_list()[1:]  # don't include batch size
 
     x1 = bottleneck_(x1)
     _, rest = split(x1, 2, axis=1)
@@ -130,7 +131,7 @@ def generator(encoder, decoder, batch_size):
     x = concatenate([attr, rest])
 
     x = Dense(np.prod(encoder_output_shape_no_bs))(x)
-    x = reshape(x, encoder_output_shape)
+    x = tf.keras.layers.Reshape(encoder_output_shape_no_bs)(x)
 
     for up in decoder:
         x = up(x)

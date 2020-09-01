@@ -1,8 +1,11 @@
 *.png
 *.pdf
 *.zip
+__color_aoi__/
+results/
 checksum.txt
 .DS_Store
 __pycache__
 _archive
 *.sh
+show_diff.py
