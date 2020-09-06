@@ -14,14 +14,13 @@ import models as m
 
 
 class PuppetGAN:
-    def __init__(self, batch_size, noise_std=.001):
-        self.batch_size = batch_size
+    def __init__(self, noise_std=.001):
         self.noise_std = noise_std
 
         self.sup_loss = tf.keras.losses.MeanAbsoluteError()
         self.gan_loss = tf.keras.losses.MeanSquaredError()
 
-        self.encoder = m.get_encoder()
+        self.encoder = m.get_encoder(self.noise_std)
         self.decoder_real, self.decoder_synth = m.get_decoder(), m.get_decoder()
 
         self.gen_real, self.gen_real_opt, self.gen_real_grads = None, None, None
@@ -78,8 +77,8 @@ class PuppetGAN:
         return generator, optimizer, gradients
 
 
-    def init_discriminator(self, lr=5e-5, beta_1=.5, target=False):        
-        discriminator = m.pix2pix_discriminator(target=target)
+    def init_discriminator(self, lr=5e-5, beta_1=.5):        
+        discriminator = m.pix2pix_discriminator()
         optimizer = tf.keras.optimizers.Adam(lr, beta_1=beta_1)
         gradients = None
 
@@ -283,6 +282,7 @@ class PuppetGAN:
             path_real,
             path_synth,
             img_size=(128, 128),
+            batch_size=30,
             epochs=500,
             save_model_every=5,
             save_images_every=1):
@@ -295,10 +295,10 @@ class PuppetGAN:
 
             epoch_losses = np.zeros([8])
 
-            data_real = utils.get_batch_flow(path_real, img_size, self.batch_size)
-            data_synth = utils.get_batch_flow(path_synth, tuple(3*dim for dim in img_size), self.batch_size)
+            data_real = utils.get_batch_flow(path_real, img_size, batch_size)
+            data_synth = utils.get_batch_flow(path_synth, tuple(3*dim for dim in img_size), batch_size)
 
-            n_batches_real = len(data_real) if len(data_real) % self.batch_size == 0 else len(data_real) - 1
+            n_batches_real = len(data_real) if len(data_real) % batch_size == 0 else len(data_real) - 1
 
             data_real = list(islice(data_real, n_batches_real))
             data_synth = list(islice(data_synth, n_batches_real))
@@ -379,7 +379,7 @@ class PuppetGAN:
             print(i)
 
             result = np.concatenate([a for a in alphas], axis=1)
-            result = np.concatenate((np.zeros((128, 128, 3)), result), axis=1)
+            result = np.concatenate((np.zeros(img_size + (3,)), result), axis=1)
 
             b1_file = tf.convert_to_tensor(b1_file)
 

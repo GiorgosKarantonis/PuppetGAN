@@ -76,7 +76,7 @@ def get_bottleneck(dim=128, noise_std=.01):
     return result
 
 
-def get_encoder(noise_std=.01):
+def get_encoder(noise_std):
     encoder = [
         downsample(64, 4, apply_norm=False),  # (bs, 64, 64, 64)
         downsample(128, 4),  # (bs, 32, 32, 128)
@@ -139,42 +139,36 @@ def generator(encoder, decoder):
     return Model(inputs=inputs, outputs=x)
 
 
-def pix2pix_discriminator(target=True):
+def pix2pix_discriminator():
     '''
         PatchGan discriminator model (https://arxiv.org/abs/1611.07004).
     '''
     initializer = random_normal_initializer(0., 0.02)
 
-    inp = Input(shape=[None, None, 3], name='input_image')
-    x = inp
+    inputs = Input(shape=[None, None, 3], name='input_image')
+    x = inputs
 
-    if target:
-        tar = Input(shape=[None, None, 3], name='target_image')
-        x = concatenate([inp, tar])  # (bs, 256, 256, channels*2)
+    # down1 = downsample(64, 4, False)(x)  # (bs, 64, 64, 64)
+    down1 = x
+    down2 = downsample(128, 4)(down1)  # (bs, 32, 32, 128)
+    down3 = downsample(256, 4)(down2)  # (bs, 16, 16, 256)
 
-    down1 = downsample(64, 4, False)(x)  # (bs, 128, 128, 64)
-    down2 = downsample(128, 4)(down1)  # (bs, 64, 64, 128)
-    down3 = downsample(256, 4)(down2)  # (bs, 32, 32, 256)
-
-    zero_pad1 = ZeroPadding2D()(down3)  # (bs, 34, 34, 256)
+    zero_pad1 = ZeroPadding2D()(down3)  # (bs, 18, 18, 256)
     conv = Conv2D(512,
                   4,
                   strides=1,
                   kernel_initializer=initializer,
-                  use_bias=False)(zero_pad1)  # (bs, 31, 31, 512)
+                  use_bias=False)(zero_pad1)  # (bs, 15, 15, 512)
 
     norm1 = BatchNormalization()(conv)
 
     leaky_relu = LeakyReLU()(norm1)
 
-    zero_pad2 = ZeroPadding2D()(leaky_relu)  # (bs, 33, 33, 512)
+    zero_pad2 = ZeroPadding2D()(leaky_relu)  # (bs, 17, 17, 512)
 
     last = Conv2D(1,
                   4,
                   strides=1,
-                  kernel_initializer=initializer)(zero_pad2)  # (bs, 30, 30, 1)
+                  kernel_initializer=initializer)(zero_pad2)  # (bs, 14, 14, 1)
 
-    if target:
-        return Model(inputs=[inp, tar], outputs=last)
-
-    return Model(inputs=inp, outputs=last)
+    return Model(inputs=inputs, outputs=last)
