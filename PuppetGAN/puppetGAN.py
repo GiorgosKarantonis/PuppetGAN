@@ -344,7 +344,7 @@ class PuppetGAN:
             print(f'\n\tTime taken for epoch {epoch}: {time()-start}sec.')
 
 
-    def get_face_rows(self, base_path='data/faces/rows_', img_size=(128, 128), target_path='face_rows'):
+    def get_face_rows(self, base_path='../data/faces/rows_', img_size=(128, 128), target_path='face_rows'):
         if not os.path.exists(target_path):
             os.makedirs(target_path)
 
