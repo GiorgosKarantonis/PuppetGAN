@@ -4,11 +4,12 @@
 '''
 import numpy as np
 
-from tensorflow import split, reshape, random_normal_initializer
+from tensorflow import split, random_normal_initializer
 from tensorflow.keras import Sequential, Model
 from tensorflow.keras.layers import (
     concatenate,
     Input,
+    Reshape,
     Dense,
     Conv2D,
     Conv2DTranspose,
@@ -20,8 +21,6 @@ from tensorflow.keras.layers import (
     Flatten,
     GaussianNoise
 )
-
-import tensorflow as tf
 
 
 
@@ -78,9 +77,12 @@ def get_bottleneck(dim=128, noise_std=.001):
 
 def get_encoder(noise_std, bottleneck_dim=128):
     encoder = [
-        # downsample(64, 4, apply_norm=False), # (bs, 64, 64, 64)
-        downsample(64, 4), # (bs, 64, 64, 64)
-        
+        #######################################################
+        downsample(64, 4, apply_norm=False), # (bs, 64, 64, 64)
+
+        # downsample(64, 4), # (bs, 64, 64, 64)
+        #######################################################
+
         downsample(128, 4), # (bs, 32, 32, 128)
         downsample(256, 4), # (bs, 16, 16, 256)
         downsample(512, 4), # (bs, 8, 8, 512)
@@ -96,10 +98,13 @@ def get_encoder(noise_std, bottleneck_dim=128):
 
 def get_decoder():
     return [
-        # upsample(512, 4, apply_dropout=True), # (bs, 2, 2, 1024)
-        # upsample(512, 4, apply_dropout=True), # (bs, 4, 4, 1024)
-        upsample(512, 4), # (bs, 2, 2, 1024)
-        upsample(512, 4), # (bs, 4, 4, 1024)
+        ########################################################
+        upsample(512, 4, apply_dropout=True), # (bs, 2, 2, 1024)
+        upsample(512, 4, apply_dropout=True), # (bs, 4, 4, 1024)
+
+        # upsample(512, 4), # (bs, 2, 2, 1024)
+        # upsample(512, 4), # (bs, 4, 4, 1024)
+        ########################################################
 
         upsample(512, 4), # (bs, 8, 8, 1024)
         upsample(256, 4), # (bs, 16, 16, 512)
@@ -136,7 +141,7 @@ def generator(encoder, decoder):
     x = concatenate([attr, rest])
 
     x = Dense(np.prod(encoder_output_shape_no_bs))(x)
-    x = tf.keras.layers.Reshape(encoder_output_shape_no_bs)(x)
+    x = Reshape(encoder_output_shape_no_bs)(x)
 
     for up in decoder:
         x = up(x)
@@ -153,10 +158,15 @@ def pix2pix_discriminator():
     inputs = Input(shape=[None, None, 3], name='input_image')
     x = inputs
 
-    # down1 = downsample(64, 4, False)(x) # (bs, 64, 64, 64)
-    # REMEMBER TO CHANGE THE NEXT INPUT IF YOU ADD THE REMOVED LAYER!
 
-    down2 = downsample(128, 4)(x) # (bs, 32, 32, 128)
+    ########################################################
+    down1 = downsample(64, 4, False)(x) # (bs, 64, 64, 64)
+    down2 = downsample(128, 4)(down1) # (bs, 32, 32, 128)
+
+    # down2 = downsample(128, 4)(x) # (bs, 32, 32, 128)
+    ########################################################
+
+
     down3 = downsample(256, 4)(down2) # (bs, 16, 16, 256)
 
     zero_pad1 = ZeroPadding2D()(down3) # (bs, 18, 18, 256)

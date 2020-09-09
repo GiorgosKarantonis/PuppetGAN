@@ -19,8 +19,8 @@ if __name__ == '__main__':
 
     puppet_GAN.fit(path_real=real_path,
                    path_synth=synth_path,
-                   batch_size=BATCH_SIZE,
                    epochs=EPOCHS,
+                   batch_size=BATCH_SIZE,
                    img_size=IMG_SIZE,
                    save_images_every=SAVE_IMG_EVERY,
                    save_model_every=SAVE_MODEL_EVERY)

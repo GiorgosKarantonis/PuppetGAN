@@ -401,15 +401,3 @@ class PuppetGAN:
 
             result = utils.denormalize(result)
             plt.imsave(os.path.join(target_path, f'{i}.png'), result)
-
-
-
-
-
-
-
-
-
-
-
-
