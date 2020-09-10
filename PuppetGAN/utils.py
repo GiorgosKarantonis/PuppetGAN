@@ -9,6 +9,12 @@ import tensorflow as tf
 
 
 def normalize(img):
+    '''
+        Normalize, in [-1, 1], images of shape [batch_size, height, width, filters].
+
+        args:
+            img : The images to normalize.
+    '''
     img = tf.cast(img, tf.float32)
     img = (img / 127.5) - 1
     
@@ -16,10 +22,22 @@ def normalize(img):
 
 
 def denormalize(img):
+    '''
+        De-normalize images of shape [batch_size, height, width, filters].
+
+        args:
+            img : The images to de-normalize.
+    '''
     return ((img + 1) * 127.5) / 255
 
 
 def split_to_attributes(img):
+    '''
+        Split b to b1, b2 and b3.
+        
+        args:
+            img : The images, of shape [batch_size, height, width, filters], to split.
+    '''
     window = int(img.shape[1] / 3)
 
     rest = img[:, :window, :window, :]
@@ -30,6 +48,16 @@ def split_to_attributes(img):
 
 
 def get_batch_flow(path, target_size, batch_size):
+    '''
+        Create a flow of minibatches.
+        Ideally tf.keras.preprocessing.image_dataset_from_directory would be used,
+        but the cloud's tensorflow version didn't support it.
+
+        args:
+            path        : The path where the dataset is stored.
+            target_size : The size of the images.
+            batch_size  : The size of the mini-batch.
+    '''
     generator = tf.keras.preprocessing.image.ImageDataGenerator()
 
     return generator.flow_from_directory(path, 
@@ -40,12 +68,23 @@ def get_batch_flow(path, target_size, batch_size):
 
 
 def make_noisy(img, mean=0., stddev=.01):
+    '''
+        Add noise to an image.
+
+        args:
+            img    : The images to add the noise to.
+            mean   : The mean of the noise distribution.
+            stddev : The standard deviation of the noise distribution.
+    '''
     noise = tf.random.normal(img.shape, mean=mean, stddev=stddev)
 
     return img + noise
 
 
 def print_losses(losses):
+    '''
+        Print the training losses.
+    '''
     print(f'\tReconstruction Loss:\t{losses[0]}')
     print(f'\tDisentanglement Loss:\t{losses[1]}')
     print(f'\tCycle Loss:\t\t{losses[2]}')
@@ -59,6 +98,9 @@ def print_losses(losses):
 
 
 def plot_losses(losses, save_path='./results/'):
+    '''
+        Plot the training losses.
+    '''
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
@@ -88,6 +130,9 @@ def plot_losses(losses, save_path='./results/'):
 
 
 def save(a, b1, b2, b3, gen_imgs, batch, epoch, base_path='./results/', remove_existing=False):
+    '''
+        Save the generated images.
+    '''
     save_path = os.path.join(base_path, f'epoch_{epoch}')
 
     if remove_existing and os.path.exists(base_path):

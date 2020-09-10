@@ -25,6 +25,15 @@ from tensorflow.keras.layers import (
 
 
 def downsample(filters, size, apply_norm=True):
+    '''
+        A downsampling layer.
+
+        args:
+            filters    : The number of filters in the layer's output.
+            size       : The size of the kernel.
+            apply_norm : Whether or not to add Batch Normalization
+                         at the output of the downsampling layer.
+    '''
     initializer = random_normal_initializer(0., .02)
 
     result = Sequential()
@@ -44,6 +53,15 @@ def downsample(filters, size, apply_norm=True):
 
 
 def upsample(filters, size, apply_dropout=False):
+    '''
+        An upsampling layer.
+
+        args:
+            filters       : The number of filters in the layer's output.
+            size          : The size of the kernel.
+            apply_dropout : Whether or not to add Dropout
+                            at the output of the upsampling layer.
+    '''
     initializer = random_normal_initializer(0., .02)
 
     result = Sequential()
@@ -65,6 +83,14 @@ def upsample(filters, size, apply_dropout=False):
 
 
 def get_bottleneck(dim=128, noise_std=.001):
+    '''
+        Create the bottleneck.
+
+        args:
+            dim       : The size of the bottleneck.
+            noise_std : The standard deviation of the Gaussian Noise
+                        added to the output of the bottleneck.
+    '''
     assert dim % 2 == 0
 
     result = Sequential()
@@ -76,13 +102,15 @@ def get_bottleneck(dim=128, noise_std=.001):
 
 
 def get_encoder(noise_std, bottleneck_dim=128):
+    '''
+        The shared encoder.
+
+        args:
+            noise_std      : The std of the bottleneck noise.
+            bottleneck_dim : The size of the bottleneck.
+    '''
     encoder = [
-        #######################################################
         downsample(64, 4, apply_norm=False), # (bs, 64, 64, 64)
-
-        # downsample(64, 4), # (bs, 64, 64, 64)
-        #######################################################
-
         downsample(128, 4), # (bs, 32, 32, 128)
         downsample(256, 4), # (bs, 16, 16, 256)
         downsample(512, 4), # (bs, 8, 8, 512)
@@ -97,15 +125,12 @@ def get_encoder(noise_std, bottleneck_dim=128):
 
 
 def get_decoder():
+    '''
+        The decoder architecture.
+    '''
     return [
-        ########################################################
         upsample(512, 4, apply_dropout=True), # (bs, 2, 2, 1024)
         upsample(512, 4, apply_dropout=True), # (bs, 4, 4, 1024)
-
-        # upsample(512, 4), # (bs, 2, 2, 1024)
-        # upsample(512, 4), # (bs, 4, 4, 1024)
-        ########################################################
-
         upsample(512, 4), # (bs, 8, 8, 1024)
         upsample(256, 4), # (bs, 16, 16, 512)
         upsample(128, 4), # (bs, 32, 32, 256)
@@ -120,6 +145,13 @@ def get_decoder():
 
 
 def generator(encoder, decoder):
+    '''
+        The generator architecture.
+
+        args:
+            encoder : The shared encoder.
+            decoder : The real or the synthetic decoder.
+    '''
     inputs = Input(shape=[2*128, 128, 3])
     encoder_, bottleneck_ = encoder
     

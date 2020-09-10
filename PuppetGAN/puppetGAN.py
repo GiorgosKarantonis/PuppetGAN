@@ -15,14 +15,20 @@ import models as m
 
 class PuppetGAN:
     def __init__(self, noise_std=.001):
+        # the standard deviation of the noise
         self.noise_std = noise_std
 
+        # the supervised loss
         self.sup_loss = tf.keras.losses.MeanAbsoluteError()
+        # the adversarial loss
         self.gan_loss = tf.keras.losses.MeanSquaredError()
 
+        # create the shared encoder
         self.encoder = m.get_encoder(self.noise_std)
+        # create the decoders
         self.decoder_real, self.decoder_synth = m.get_decoder(), m.get_decoder()
 
+        # initialize the GANs
         self.gen_real, self.gen_real_opt, self.gen_real_grads = None, None, None
         self.gen_synth, self.gen_synth_opt, self.gen_synth_grads = None, None, None
 
@@ -35,6 +41,9 @@ class PuppetGAN:
 
 
     def setup_model(self):
+        '''
+            Create the generators and the discriminators.
+        '''
         if not self.gen_real:
             self.gen_real, self.gen_real_opt, self.gen_real_grads = self.init_generator(self.encoder, self.decoder_real)
 
@@ -49,6 +58,9 @@ class PuppetGAN:
 
 
     def define_checkpoints(self, path='./checkpoints/train'):
+        '''
+            The structure of the checkpoints.
+        '''
         ckpt = tf.train.Checkpoint(generator_real=self.gen_real,
                                    generator_synth=self.gen_real,
                                    generator_real_optimizer=self.gen_real_opt,
@@ -69,7 +81,10 @@ class PuppetGAN:
             print('Latest checkpoint restored!')
 
 
-    def init_generator(self, encoder, decoder, lr=2e-4, beta_1=.5):        
+    def init_generator(self, encoder, decoder, lr=2e-4, beta_1=.5):
+        '''
+            Create a generator.
+        '''
         generator = m.generator(encoder, decoder)
         optimizer = tf.keras.optimizers.Adam(lr, beta_1=beta_1)
         gradients = None
@@ -77,7 +92,10 @@ class PuppetGAN:
         return generator, optimizer, gradients
 
 
-    def init_discriminator(self, lr=5e-5, beta_1=.5):        
+    def init_discriminator(self, lr=5e-5, beta_1=.5):
+        '''
+            Create a discriminator.
+        '''
         discriminator = m.pix2pix_discriminator()
         optimizer = tf.keras.optimizers.Adam(lr, beta_1=beta_1)
         gradients = None
@@ -85,11 +103,29 @@ class PuppetGAN:
         return discriminator, optimizer, gradients
 
 
-    def generator_loss(self, generated):
-        return self.gan_loss(tf.ones_like(generated), generated)
+    def generator_loss(self, generated, weight=1):
+        '''
+            Calculates the generator loss, defined in the __init__ function.
+            By default the Mean Squared Error is used. 
+
+            args:
+                real      : The real image.
+                generated : The generated image.
+                weight    : The weight of the discriminator loss.
+        '''
+        return weight * self.gan_loss(tf.ones_like(generated), generated)
 
 
     def discriminator_loss(self, real, generated, weight=1):
+        '''
+            Calculates the discriminator loss, defined in the __init__ function.
+            By default the Mean Squared Error is used. 
+
+            args:
+                real      : The real image.
+                generated : The generated image.
+                weight    : The weight of the discriminator loss.
+        '''
         loss_real = self.gan_loss(tf.ones_like(real), real)
         loss_generated = self.gan_loss(tf.zeros_like(generated), generated)
 
@@ -97,14 +133,40 @@ class PuppetGAN:
 
 
     def supervised_loss(self, real, generated, weight=1):
+        '''
+            Calculates the supervised loss, defined in the __init__ function.
+            By default the Mean Absolute Error is used. 
+
+            args:
+                real      : The real image.
+                generated : The generated image.
+                weight    : The weight of the supervised loss.
+        '''
         return weight * self.sup_loss(real, generated)
 
 
-    @tf.function
+    @tf.function # enable eager execution for faster run times
     def train_step(self, a, b1, b2, b3):
+        '''
+            Performs one training step.
+
+            args:
+                a  : The images from the real domain.
+                b1 : The images from the synthetic domain
+                     where only the AoI is present.
+                b2 : The images from the synthetic domain
+                     where all the attributes, except the AoI, are present.
+                b3 : The images from the synthetic domain
+                     where all the attributes are present.
+
+            returns:
+                a dictionary containing all the losses.
+                a dictionary containing all the generated images.
+        '''
         losses, generated_images = {}, {}
 
         with tf.GradientTape(persistent=True) as tape:
+            # initialize all the losses and their respective weights
             reconstruction_loss, reconstruction_weight = 0, 10
             disentanglement_loss, dissentaglement_weight = 0, 10
             cycle_loss, cycle_weight = 0, 10
@@ -225,6 +287,7 @@ class PuppetGAN:
             attr_cycle_loss_a_star *= attr_cycle_weight_a_star
 
 
+            # normalize the losses
             losses['reconstruction'] = reconstruction_loss / reconstruction_weight
             losses['disentanglement'] = disentanglement_loss / dissentaglement_weight
             losses['cycle'] = cycle_loss / cycle_weight
@@ -235,19 +298,19 @@ class PuppetGAN:
             losses['discriminator real'] = disc_real_loss
             losses['discriminator synth'] = disc_synth_loss
 
-            # Add the supervised losses to the generators
+            # add the supervised losses to the generators
             gen_real_loss += reconstruction_loss + cycle_loss + attr_cycle_loss_b_star + attr_cycle_loss_a_star
             gen_synth_loss += reconstruction_loss + disentanglement_loss + cycle_loss + attr_cycle_loss_b_star + attr_cycle_loss_a_star
 
 
-        # Calculate the gradients
+        # calculate the gradients
         self.gen_real_grads = tape.gradient(gen_real_loss, self.gen_real.trainable_variables)
         self.gen_synth_grads = tape.gradient(gen_synth_loss, self.gen_synth.trainable_variables)
 
         self.disc_real_grads = tape.gradient(disc_real_loss, self.disc_real.trainable_variables)
         self.disc_synth_grads = tape.gradient(disc_synth_loss, self.disc_synth.trainable_variables)
 
-        # Apply the gradients to the optimizers
+        # apply the gradients to the optimizers
         self.gen_real_opt.apply_gradients(zip(self.gen_real_grads, self.gen_real.trainable_variables))
         self.gen_synth_opt.apply_gradients(zip(self.gen_synth_grads, self.gen_synth.trainable_variables))
 
@@ -255,27 +318,28 @@ class PuppetGAN:
         self.disc_synth_opt.apply_gradients(zip(self.disc_synth_grads, self.disc_synth.trainable_variables))
 
         return losses, {
-            'reconstructed a' : a_hat,
-            'reconstructed b1' : b1_hat,
-            'reconstructed b2' : b2_hat,
-            'reconstructed b3' : b3_hat_rec,
+                        'reconstructed a' : a_hat,
+                        'reconstructed b1' : b1_hat,
+                        'reconstructed b2' : b2_hat,
+                        'reconstructed b3' : b3_hat_rec,
 
-            'disentangled b3' : b3_hat_dis,
+                        'disentangled b3' : b3_hat_dis,
 
-            'cycled a' : a_cycled_hat,
-            'cycle b tilde' : b_cycled_tilde,
-            'cycled b1' : b1_cycled_hat,
-            'cycle a1 tilde' : a1_cycled_tilde,
-            'cycled b2' : b2_cycled_hat,
-            'cycle a2 tilde' : a2_cycled_tilde,
-            'cycled b3' : b3_cycled_hat,
-            'cycle a3 tilde' : a3_cycled_tilde,
+                        'cycled a' : a_cycled_hat,
+                        'cycle b tilde' : b_cycled_tilde,
+                        'cycled b1' : b1_cycled_hat,
+                        'cycle a1 tilde' : a1_cycled_tilde,
+                        'cycled b2' : b2_cycled_hat,
+                        'cycle a2 tilde' : a2_cycled_tilde,
+                        'cycled b3' : b3_cycled_hat,
+                        'cycle a3 tilde' : a3_cycled_tilde,
 
-            'attr cycle a tilde' : a_tilde,
-            'attr cycled b3' : b3_hat_star,
-            'attr cycle b tilde' : b_tilde,
-            'attr cycled a' : a_hat_star
-        }
+                        'attr cycle a tilde' : a_tilde,
+                        'attr cycled b3' : b3_hat_star,
+                        'attr cycle b tilde' : b_tilde,
+                        'attr cycled a' : a_hat_star
+                    }
+                        
 
 
     def fit(self,
@@ -286,6 +350,18 @@ class PuppetGAN:
             epochs=500,
             save_model_every=5,
             save_images_every=1):
+        '''
+            The training function.
+
+            args:
+                path_real         : The path containing the images from the real domain are stored.
+                path_synth        : The path where the images from the real domain are stored.
+                img_size          : The size of the images. It's used to deal with different datasets.
+                batch_size        : The size of the mini-batch.
+                epochs            : The number of epochs.
+                save_model_every  : Every how many epochs to create a new checkpoint.
+                save_images_every : Every how many epochs to save the outputs of the model.
+        '''
 
         losses = np.empty((0, 8), float)
 
@@ -295,6 +371,7 @@ class PuppetGAN:
 
             epoch_losses = np.zeros([8])
 
+            # load the datasets
             data_real = utils.get_batch_flow(path_real, img_size, batch_size)
             data_synth = utils.get_batch_flow(path_synth, tuple(3*dim for dim in img_size), batch_size)
 
@@ -306,9 +383,11 @@ class PuppetGAN:
             for i, (a, b) in enumerate(zip(data_real, data_synth)):
                 print(f'\tBatch: {i+1} / {n_batches_real}\r', end='')
 
+                # normalize the input images
                 a = utils.normalize(a)
                 b = utils.normalize(b)
 
+                # split b to b1, b2 and b3
                 b1, b2, b3 = utils.split_to_attributes(b)
 
                 batch_losses, generated_images = self.train_step(a, b1, b2, b3)
@@ -325,6 +404,7 @@ class PuppetGAN:
 
                 epoch_losses = np.add(epoch_losses, batch_losses)
 
+            # calculate the losses for the whole epoch
             epoch_losses = epoch_losses / n_batches_real
             losses = np.append(losses, [epoch_losses], axis=0)
 
@@ -344,7 +424,13 @@ class PuppetGAN:
             print(f'\n\tTime taken for epoch {epoch}: {time()-start}sec.')
 
 
-    def get_face_rows(self, base_path='../data/faces/rows_', img_size=(128, 128), target_path='face_rows'):
+    def get_face_rows(self,
+                      base_path='../data/faces/rows_',
+                      img_size=(128, 128),
+                      target_path='face_rows'):
+        '''
+            Create face rows like the ones from the paper for evaluation.
+        '''
         if not os.path.exists(target_path):
             os.makedirs(target_path)
 
