@@ -7,5 +7,6 @@ checksum.txt
 .DS_Store
 __pycache__
 _archive
-*.sh
+qrsh.sh
+load_modules.sh
 show_diff.py
