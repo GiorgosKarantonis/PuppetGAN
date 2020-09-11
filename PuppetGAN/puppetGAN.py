@@ -14,17 +14,27 @@ import models as m
 
 
 class PuppetGAN:
-    def __init__(self, noise_std=.001):
+    def __init__(self, img_size=(128, 128), noise_std=.2, bottleneck_noise=0.):
+        # the desired size of the images
+        # it doesn't have to be equal to the input size
+        # every input will be resized to img_size
+        self.img_size = img_size
+
         # the standard deviation of the noise
+        # that will be added to the translations
         self.noise_std = noise_std
 
-        # the supervised loss
+        # the standard deviation of the noise
+        # that will be added at the bottleneck
+        self.bottleneck_noise = bottleneck_noise
+
+        # the supervised objective
         self.sup_loss = tf.keras.losses.MeanAbsoluteError()
-        # the adversarial loss
+        # the adversarial objective
         self.gan_loss = tf.keras.losses.MeanSquaredError()
 
         # create the shared encoder
-        self.encoder = m.get_encoder(self.noise_std)
+        self.encoder = m.get_encoder(self.bottleneck_noise)
         # create the decoders
         self.decoder_real, self.decoder_synth = m.get_decoder(), m.get_decoder()
 
@@ -35,6 +45,7 @@ class PuppetGAN:
         self.disc_real, self.disc_real_opt, self.disc_real_grads = None, None, None
         self.disc_synth, self.disc_synth_opt, self.disc_synth_grads = None, None, None
 
+        # setup the GANs
         self.setup_model()
 
         self.ckpt, self.ckpt_manager = self.define_checkpoints()
@@ -45,10 +56,10 @@ class PuppetGAN:
             Create the generators and the discriminators.
         '''
         if not self.gen_real:
-            self.gen_real, self.gen_real_opt, self.gen_real_grads = self.init_generator(self.encoder, self.decoder_real)
+            self.gen_real, self.gen_real_opt, self.gen_real_grads = self.init_generator(self.encoder, self.decoder_real, self.img_size)
 
         if not self.gen_synth:
-            self.gen_synth, self.gen_synth_opt, self.gen_synth_grads = self.init_generator(self.encoder, self.decoder_synth)
+            self.gen_synth, self.gen_synth_opt, self.gen_synth_grads = self.init_generator(self.encoder, self.decoder_synth, self.img_size)
 
         if not self.disc_real:
             self.disc_real, self.disc_real_opt, self.disc_real_grads = self.init_discriminator()
@@ -81,11 +92,11 @@ class PuppetGAN:
             print('Latest checkpoint restored!')
 
 
-    def init_generator(self, encoder, decoder, lr=2e-4, beta_1=.5):
+    def init_generator(self, encoder, decoder, img_size, lr=2e-4, beta_1=.5):
         '''
             Create a generator.
         '''
-        generator = m.generator(encoder, decoder)
+        generator = m.generator(encoder, decoder, img_size)
         optimizer = tf.keras.optimizers.Adam(lr, beta_1=beta_1)
         gradients = None
 
@@ -179,111 +190,127 @@ class PuppetGAN:
             disc_synth_loss = 0
 
 
-            # Reconstruction Loss
+            # Reconstruction
+            # a
             a_hat = self.gen_real(tf.concat([a, a], axis=1), training=True)
 
             reconstruction_loss += self.supervised_loss(a, a_hat)
             gen_real_loss += self.generator_loss(self.disc_real(a_hat))
             disc_real_loss += self.discriminator_loss(self.disc_real(a), self.disc_real(a_hat))
 
+            # b1
             b1_hat = self.gen_synth(tf.concat([b1, b1], axis=1), training=True)
 
             reconstruction_loss += self.supervised_loss(b1, b1_hat)
             gen_synth_loss += self.generator_loss(self.disc_synth(b1_hat))
             disc_synth_loss += self.discriminator_loss(self.disc_synth(b1), self.disc_synth(b1_hat))
 
+            # b2
             b2_hat = self.gen_synth(tf.concat([b2, b2], axis=1), training=True)
 
             reconstruction_loss += self.supervised_loss(b2, b2_hat)
             gen_synth_loss += self.generator_loss(self.disc_synth(b2_hat))
             disc_synth_loss += self.discriminator_loss(self.disc_synth(b2), self.disc_synth(b2_hat))
 
+            # b3
             b3_hat_rec = self.gen_synth(tf.concat([b3, b3], axis=1), training=True)
 
             reconstruction_loss += self.supervised_loss(b3, b3_hat_rec)
             gen_synth_loss += self.generator_loss(self.disc_synth(b3_hat_rec))
             disc_synth_loss += self.discriminator_loss(self.disc_synth(b3), self.disc_synth(b3_hat_rec))
 
+            # weight reconstruction loss
             reconstruction_loss *= reconstruction_weight
 
 
-            # Dissentaglement Loss
+            # Dissentaglement
+            # (b2, b1) -> b3
             b3_hat_dis = self.gen_synth(tf.concat([b2, b1], axis=1), training=True)
 
             disentanglement_loss += self.supervised_loss(b3, b3_hat_dis)
             gen_synth_loss += self.generator_loss(self.disc_synth(b3_hat_dis))
             disc_synth_loss += self.discriminator_loss(self.disc_synth(b3), self.disc_synth(b3_hat_dis))
 
+            # weight disentanglement loss
             disentanglement_loss *= dissentaglement_weight
 
 
-            # Cycle Loss
+            # CycleGAN
+            # a -> b -> a
             b_cycled_tilde = self.gen_synth(tf.concat([a, a], axis=1), training=True)
             b_cycled_tilde_noisy = utils.make_noisy(b_cycled_tilde, stddev=self.noise_std)
             a_cycled_hat = self.gen_real(tf.concat([b_cycled_tilde_noisy, b_cycled_tilde_noisy], axis=1), training=True)
 
             cycle_loss += self.supervised_loss(a, a_cycled_hat)
-            gen_real_loss += self.generator_loss(self.disc_real(a_cycled_hat))
             gen_synth_loss += self.generator_loss(self.disc_synth(b_cycled_tilde))
-            disc_real_loss += self.discriminator_loss(self.disc_real(a), self.disc_real(a_cycled_hat))
             disc_synth_loss += self.discriminator_loss(self.disc_synth(b1), self.disc_synth(b_cycled_tilde))
+            gen_real_loss += self.generator_loss(self.disc_real(a_cycled_hat))
+            disc_real_loss += self.discriminator_loss(self.disc_real(a), self.disc_real(a_cycled_hat))
 
+            # b1 -> a -> b1
             a1_cycled_tilde = self.gen_real(tf.concat([b1, b1], axis=1), training=True)
             a1_cycled_tilde_noisy = utils.make_noisy(a1_cycled_tilde, stddev=self.noise_std)
             b1_cycled_hat = self.gen_synth(tf.concat([a1_cycled_tilde_noisy, a1_cycled_tilde_noisy], axis=1), training=True)
 
             cycle_loss += self.supervised_loss(b1, b1_cycled_hat)
             gen_real_loss += self.generator_loss(self.disc_real(a1_cycled_tilde))
-            gen_synth_loss += self.generator_loss(self.disc_synth(b1_cycled_hat))
             disc_real_loss += self.discriminator_loss(self.disc_real(a), self.disc_real(a1_cycled_tilde))
+            gen_synth_loss += self.generator_loss(self.disc_synth(b1_cycled_hat))
             disc_synth_loss += self.discriminator_loss(self.disc_synth(b1), self.disc_synth(b1_cycled_hat))
 
+            # b2 -> a -> b2
             a2_cycled_tilde = self.gen_real(tf.concat([b2, b2], axis=1), training=True)
             a2_cycled_tilde_noisy = utils.make_noisy(a2_cycled_tilde, stddev=self.noise_std)
             b2_cycled_hat = self.gen_synth(tf.concat([a2_cycled_tilde_noisy, a2_cycled_tilde_noisy], axis=1), training=True)
 
             cycle_loss += self.supervised_loss(b2, b2_cycled_hat)
             gen_real_loss += self.generator_loss(self.disc_real(a2_cycled_tilde))
-            gen_synth_loss += self.generator_loss(self.disc_synth(b2_cycled_hat))
             disc_real_loss += self.discriminator_loss(self.disc_real(a), self.disc_real(a2_cycled_tilde))
+            gen_synth_loss += self.generator_loss(self.disc_synth(b2_cycled_hat))
             disc_synth_loss += self.discriminator_loss(self.disc_synth(b2), self.disc_synth(b2_cycled_hat))
 
+            # b3 -> a -> b3
             a3_cycled_tilde = self.gen_real(tf.concat([b3, b3], axis=1), training=True)
             a3_cycled_tilde_noisy = utils.make_noisy(a3_cycled_tilde, stddev=self.noise_std)
             b3_cycled_hat = self.gen_synth(tf.concat([a3_cycled_tilde_noisy, a3_cycled_tilde_noisy], axis=1), training=True)
 
             cycle_loss += self.supervised_loss(b3, b3_cycled_hat)
             gen_real_loss += self.generator_loss(self.disc_real(a3_cycled_tilde))
-            gen_synth_loss += self.generator_loss(self.disc_synth(b3_cycled_hat))
             disc_real_loss += self.discriminator_loss(self.disc_real(a), self.disc_real(a3_cycled_tilde))
+            gen_synth_loss += self.generator_loss(self.disc_synth(b3_cycled_hat))
             disc_synth_loss += self.discriminator_loss(self.disc_synth(b3), self.disc_synth(b3_cycled_hat))
 
+            # weight cycle loss
             cycle_loss *= cycle_weight
 
 
-            # Attribute Cycle Loss
+            # Attribute CycleGAN
+            # (a, b1) -> a -> b3
             a_tilde = self.gen_real(tf.concat([a, b1], axis=1), training=True)
             a_tilde_noisy = utils.make_noisy(a_tilde, stddev=self.noise_std)
             b3_hat_star = self.gen_synth(tf.concat([b2, a_tilde_noisy], axis=1), training=True)
 
             attr_cycle_loss_b_star += self.supervised_loss(b3, b3_hat_star)
             gen_real_loss += self.generator_loss(self.disc_real(a_tilde))
-            gen_synth_loss += self.generator_loss(self.disc_synth(b3_hat_star))
             disc_real_loss += self.discriminator_loss(self.disc_real(a), self.disc_real(a_tilde))
+            gen_synth_loss += self.generator_loss(self.disc_synth(b3_hat_star))
             disc_synth_loss += self.discriminator_loss(self.disc_synth(b3), self.disc_synth(b3_hat_star))
 
+            # weight L(f(a, b1)=b3)
             attr_cycle_loss_b_star *= attr_cycle_weight_b_star
 
+            # (b1, a) -> b -> a
             b_tilde = self.gen_synth(tf.concat([b1, a], axis=1), training=True)
             b_tilde_noisy = utils.make_noisy(b_tilde, stddev=self.noise_std)
             a_hat_star = self.gen_real(tf.concat([a, b_tilde_noisy], axis=1), training=True)
 
             attr_cycle_loss_a_star += self.supervised_loss(a, a_hat_star)
-            gen_real_loss += self.generator_loss(self.disc_real(a_hat_star))
             gen_synth_loss += self.generator_loss(self.disc_synth(b_tilde))
-            disc_real_loss += self.discriminator_loss(self.disc_real(a), self.disc_real(a_hat_star))
             disc_synth_loss += self.discriminator_loss(self.disc_synth(b1), self.disc_synth(b_tilde))
+            gen_real_loss += self.generator_loss(self.disc_real(a_hat_star))
+            disc_real_loss += self.discriminator_loss(self.disc_real(a), self.disc_real(a_hat_star))
 
+            # weight L(g(b1, a)=a)
             attr_cycle_loss_a_star *= attr_cycle_weight_a_star
 
 
@@ -291,30 +318,37 @@ class PuppetGAN:
             losses['reconstruction'] = reconstruction_loss / reconstruction_weight
             losses['disentanglement'] = disentanglement_loss / dissentaglement_weight
             losses['cycle'] = cycle_loss / cycle_weight
-            losses['attribute cycle'] = (attr_cycle_loss_b_star / attr_cycle_weight_b_star) + (attr_cycle_loss_a_star / attr_cycle_weight_a_star)
-
+            losses['attribute cycle'] = (attr_cycle_loss_b_star / attr_cycle_weight_b_star) + \
+                                        (attr_cycle_loss_a_star / attr_cycle_weight_a_star)
             losses['generator real'] = gen_real_loss
             losses['generator synth'] = gen_synth_loss
             losses['discriminator real'] = disc_real_loss
             losses['discriminator synth'] = disc_synth_loss
 
             # add the supervised losses to the generators
-            gen_real_loss += reconstruction_loss + cycle_loss + attr_cycle_loss_b_star + attr_cycle_loss_a_star
-            gen_synth_loss += reconstruction_loss + disentanglement_loss + cycle_loss + attr_cycle_loss_b_star + attr_cycle_loss_a_star
+            gen_real_loss += reconstruction_loss +    \
+                             cycle_loss +             \
+                             attr_cycle_loss_b_star + \
+                             attr_cycle_loss_a_star
+            gen_synth_loss += reconstruction_loss +    \
+                              disentanglement_loss +   \
+                              cycle_loss +             \
+                              attr_cycle_loss_b_star + \
+                              attr_cycle_loss_a_star
 
 
         # calculate the gradients
         self.gen_real_grads = tape.gradient(gen_real_loss, self.gen_real.trainable_variables)
-        self.gen_synth_grads = tape.gradient(gen_synth_loss, self.gen_synth.trainable_variables)
-
         self.disc_real_grads = tape.gradient(disc_real_loss, self.disc_real.trainable_variables)
+
+        self.gen_synth_grads = tape.gradient(gen_synth_loss, self.gen_synth.trainable_variables)
         self.disc_synth_grads = tape.gradient(disc_synth_loss, self.disc_synth.trainable_variables)
 
         # apply the gradients to the optimizers
         self.gen_real_opt.apply_gradients(zip(self.gen_real_grads, self.gen_real.trainable_variables))
-        self.gen_synth_opt.apply_gradients(zip(self.gen_synth_grads, self.gen_synth.trainable_variables))
-
         self.disc_real_opt.apply_gradients(zip(self.disc_real_grads, self.disc_real.trainable_variables))
+
+        self.gen_synth_opt.apply_gradients(zip(self.gen_synth_grads, self.gen_synth.trainable_variables))
         self.disc_synth_opt.apply_gradients(zip(self.disc_synth_grads, self.disc_synth.trainable_variables))
 
         return losses, {
@@ -345,7 +379,6 @@ class PuppetGAN:
     def fit(self,
             path_real,
             path_synth,
-            img_size=(128, 128),
             batch_size=30,
             epochs=500,
             save_model_every=5,
@@ -372,8 +405,8 @@ class PuppetGAN:
             epoch_losses = np.zeros([8])
 
             # load the datasets
-            data_real = utils.get_batch_flow(path_real, img_size, batch_size)
-            data_synth = utils.get_batch_flow(path_synth, tuple(3*dim for dim in img_size), batch_size)
+            data_real = utils.get_batch_flow(path_real, self.img_size, batch_size)
+            data_synth = utils.get_batch_flow(path_synth, tuple(3*dim for dim in self.img_size), batch_size)
 
             n_batches_real = len(data_real) if len(data_real) % batch_size == 0 else len(data_real) - 1
 
@@ -425,8 +458,7 @@ class PuppetGAN:
 
 
     def get_face_rows(self,
-                      base_path='../data/faces/rows_',
-                      img_size=(128, 128),
+                      base_path='../data/mouth/rows_',
                       target_path='face_rows'):
         '''
             Create face rows like the ones from the paper for evaluation.
@@ -465,12 +497,12 @@ class PuppetGAN:
             print(i)
 
             result = np.concatenate([a for a in alphas], axis=1)
-            result = np.concatenate((np.zeros(img_size + (3,)), result), axis=1)
+            result = np.concatenate((np.zeros(self.img_size + (3,)), result), axis=1)
 
             b1_file = tf.convert_to_tensor(b1_file)
 
             b1_file = tf.split(b1_file, 10)
-            b1_file = tf.convert_to_tensor(b1_file)[:, :, :img_size[1], :]
+            b1_file = tf.convert_to_tensor(b1_file)[:, :, :self.img_size[1], :]
 
             for b1 in b1_file:
                 new_result_row = np.array(b1)

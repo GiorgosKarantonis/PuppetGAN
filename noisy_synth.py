@@ -6,8 +6,8 @@ import matplotlib.pyplot as plt
 
 
 
-NOISE_STD = 1
-TO_CONVERT = 'face_rows'
+NOISE_STD = .1
+TO_CONVERT = 'train'
 
 
 
@@ -21,11 +21,11 @@ def denormalize(img):
 
 
 if __name__ == '__main__':
-	faces_path = './data/faces'
+	faces_path = './data/mouth'
 
 	if TO_CONVERT == 'train':
 		synth_faces_path = os.path.join(faces_path, 'synth_/synth')
-		noisy_synth_path = os.path.join(faces_path, 'noisy_/noisy')
+		noisy_synth_path = os.path.join(faces_path, 'noisy_/noisy2')
 		scale_factor = 3
 	elif TO_CONVERT == 'face_rows':
 		synth_faces_path = os.path.join(faces_path, 'rows_/synth')

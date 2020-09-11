@@ -2,9 +2,11 @@ import puppetGAN as puppet
 
 
 
-DATASET = 'faces'
+IMG_SIZE = (128, 128)
+
+DATASET = 'mouth' # use 'digits', 'mouth' or 'light'
 EPOCHS = 1000
-BATCH_SIZE, IMG_SIZE, SAVE_IMG_EVERY, SAVE_MODEL_EVERY = (30, (128, 128), 20, 5) if DATASET == 'faces' else (200, (32, 32), 20, 20)
+BATCH_SIZE, SAVE_IMG_EVERY, SAVE_MODEL_EVERY = (30, 20, 10) if DATASET == 'mouth' else (200, 20, 20)
 
 MODE = 'train'
 
@@ -18,14 +20,13 @@ if __name__ == '__main__':
     puppet_GAN.restore_checkpoint()
 
     if MODE.lower() == 'test':
-        puppet_GAN.get_face_rows(img_size=IMG_SIZE)
-    elif MODE.lower() == 'train'
+        puppet_GAN.get_face_rows()
+    elif MODE.lower() == 'train':
         puppet_GAN.fit(path_real=real_path,
-                     path_synth=synth_path,
-                     epochs=EPOCHS,
-                     batch_size=BATCH_SIZE,
-                     img_size=IMG_SIZE,
-                     save_images_every=SAVE_IMG_EVERY,
-                     save_model_every=SAVE_MODEL_EVERY)
+                       path_synth=synth_path,
+                       epochs=EPOCHS,
+                       batch_size=BATCH_SIZE,
+                       save_images_every=SAVE_IMG_EVERY,
+                       save_model_every=SAVE_MODEL_EVERY)
     else:
         raise ValueError('Wrong mode...')

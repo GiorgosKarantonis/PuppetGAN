@@ -82,7 +82,7 @@ def upsample(filters, size, apply_dropout=False):
     return result
 
 
-def get_bottleneck(dim=128, noise_std=.001):
+def get_bottleneck(dim=128, noise_std=0.):
     '''
         Create the bottleneck.
 
@@ -104,6 +104,8 @@ def get_bottleneck(dim=128, noise_std=.001):
 def get_encoder(noise_std, bottleneck_dim=128):
     '''
         The shared encoder.
+        In the case of the faces dataset,
+        we start with a shape of (128, 128, 3).
 
         args:
             noise_std      : The std of the bottleneck noise.
@@ -127,6 +129,8 @@ def get_encoder(noise_std, bottleneck_dim=128):
 def get_decoder():
     '''
         The decoder architecture.
+        In the case of the faces dataset,
+        we want to end up with a shape of (128, 128, 3).
     '''
     return [
         upsample(512, 4, apply_dropout=True), # (bs, 2, 2, 1024)
@@ -144,7 +148,7 @@ def get_decoder():
     ]
 
 
-def generator(encoder, decoder):
+def generator(encoder, decoder, img_size=(128, 128)):
     '''
         The generator architecture.
 
@@ -152,10 +156,10 @@ def generator(encoder, decoder):
             encoder : The shared encoder.
             decoder : The real or the synthetic decoder.
     '''
-    inputs = Input(shape=[2*128, 128, 3])
+    inputs = Input(shape=[2*img_size[0], img_size[1], 3])
     encoder_, bottleneck_ = encoder
     
-    x1, x2 = inputs[:, :128, :, :], inputs[:, 128:, :, :]
+    x1, x2 = inputs[:, :img_size[0], :, :], inputs[:, img_size[0]:, :, :]
     assert x1.get_shape().as_list() == x2.get_shape().as_list()
 
     for down in encoder_:
@@ -190,15 +194,8 @@ def pix2pix_discriminator():
     inputs = Input(shape=[None, None, 3], name='input_image')
     x = inputs
 
-
-    ########################################################
     down1 = downsample(64, 4, False)(x) # (bs, 64, 64, 64)
     down2 = downsample(128, 4)(down1) # (bs, 32, 32, 128)
-
-    # down2 = downsample(128, 4)(x) # (bs, 32, 32, 128)
-    ########################################################
-
-
     down3 = downsample(256, 4)(down2) # (bs, 16, 16, 256)
 
     zero_pad1 = ZeroPadding2D()(down3) # (bs, 18, 18, 256)
