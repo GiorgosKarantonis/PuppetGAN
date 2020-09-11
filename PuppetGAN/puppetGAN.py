@@ -175,15 +175,20 @@ class PuppetGAN:
                 a dictionary containing all the generated images.
         '''
         losses, generated_images = {}, {}
-
         with tf.GradientTape(persistent=True) as tape:
-            # initialize all the losses and their respective weights
-            reconstruction_loss, reconstruction_weight = 0, 10
-            disentanglement_loss, dissentaglement_weight = 0, 10
-            cycle_loss, cycle_weight = 0, 10
-            attr_cycle_loss_b_star, attr_cycle_weight_b_star = 0, 5
-            attr_cycle_loss_a_star, attr_cycle_weight_a_star = 0, 3
+            # define the weights for each loss
+            reconstruction_weight = 10
+            dissentaglement_weight = 10
+            cycle_weight = 10
+            attr_cycle_weight_b_star = 5
+            attr_cycle_weight_a_star = 3
 
+            # initialize the losses
+            reconstruction_loss = 0
+            disentanglement_loss = 0
+            cycle_loss = 0
+            attr_cycle_loss_b_star = 0
+            attr_cycle_loss_a_star = 0
             gen_real_loss = 0
             gen_synth_loss = 0
             disc_real_loss = 0
@@ -191,28 +196,28 @@ class PuppetGAN:
 
 
             # Reconstruction
-            # a
+            # a -> a
             a_hat = self.gen_real(tf.concat([a, a], axis=1), training=True)
 
             reconstruction_loss += self.supervised_loss(a, a_hat)
             gen_real_loss += self.generator_loss(self.disc_real(a_hat))
             disc_real_loss += self.discriminator_loss(self.disc_real(a), self.disc_real(a_hat))
 
-            # b1
+            # b1 -> b1
             b1_hat = self.gen_synth(tf.concat([b1, b1], axis=1), training=True)
 
             reconstruction_loss += self.supervised_loss(b1, b1_hat)
             gen_synth_loss += self.generator_loss(self.disc_synth(b1_hat))
             disc_synth_loss += self.discriminator_loss(self.disc_synth(b1), self.disc_synth(b1_hat))
 
-            # b2
+            # b2 -> b2
             b2_hat = self.gen_synth(tf.concat([b2, b2], axis=1), training=True)
 
             reconstruction_loss += self.supervised_loss(b2, b2_hat)
             gen_synth_loss += self.generator_loss(self.disc_synth(b2_hat))
             disc_synth_loss += self.discriminator_loss(self.disc_synth(b2), self.disc_synth(b2_hat))
 
-            # b3
+            # b3 -> b3
             b3_hat_rec = self.gen_synth(tf.concat([b3, b3], axis=1), training=True)
 
             reconstruction_loss += self.supervised_loss(b3, b3_hat_rec)
@@ -356,9 +361,7 @@ class PuppetGAN:
                         'reconstructed b1' : b1_hat,
                         'reconstructed b2' : b2_hat,
                         'reconstructed b3' : b3_hat_rec,
-
                         'disentangled b3' : b3_hat_dis,
-
                         'cycled a' : a_cycled_hat,
                         'cycle b tilde' : b_cycled_tilde,
                         'cycled b1' : b1_cycled_hat,
@@ -367,7 +370,6 @@ class PuppetGAN:
                         'cycle a2 tilde' : a2_cycled_tilde,
                         'cycled b3' : b3_cycled_hat,
                         'cycle a3 tilde' : a3_cycled_tilde,
-
                         'attr cycle a tilde' : a_tilde,
                         'attr cycled b3' : b3_hat_star,
                         'attr cycle b tilde' : b_tilde,
