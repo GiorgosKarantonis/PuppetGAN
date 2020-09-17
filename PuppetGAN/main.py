@@ -10,6 +10,7 @@ EPOCHS = 500
 BATCH_SIZE, IMG_SIZE = (200, (32, 32)) if DATASET == 'digits' else (30, (128, 128))
 SAVE_IMG_EVERY = 20
 SAVE_MODEL_EVERY = 100
+ROIDS = False
 
 
 
@@ -28,6 +29,7 @@ if __name__ == '__main__':
                        epochs=EPOCHS,
                        batch_size=BATCH_SIZE,
                        save_images_every=SAVE_IMG_EVERY,
-                       save_model_every=SAVE_MODEL_EVERY)
+                       save_model_every=SAVE_MODEL_EVERY,
+                       use_roids=ROIDS)
     else:
         raise ValueError('Wrong mode...')
