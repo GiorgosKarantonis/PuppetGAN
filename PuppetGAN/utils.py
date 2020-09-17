@@ -1,6 +1,7 @@
 import os
 from itertools import islice
 
+import PIL.Image
 from matplotlib import pyplot as plt
 
 import numpy as np
@@ -67,6 +68,28 @@ def get_batch_flow(path, target_size, batch_size):
                                          class_mode=None)
 
 
+def load_test_data(path):
+    '''
+        Locates and loads the rows used for evaluation.
+
+        args:
+            path : the path where the rows are saved at
+    '''
+    data = []
+
+    for file in os.listdir(path):
+        if file.endswith('.png'):
+            img = PIL.Image.open(os.path.join(path, file)).convert('RGB')
+            img = np.array(img)
+            img = tf.convert_to_tensor(img)
+            img = normalize(img)
+
+            data.append(img)
+    data = tf.convert_to_tensor(data)
+
+    return data
+
+
 def make_noisy(img, mean=0., stddev=.01):
     '''
         Add noise to an image.
@@ -116,6 +139,7 @@ def plot_losses(losses, save_path='./results/'):
     plt.plot(epochs, losses[:, 3], color='red', label='Attirbute Cycle')
     plt.legend(loc='upper right')
     plt.savefig(os.path.join(save_path, 'supervised'))
+    plt.close()
 
     plt.figure()
     plt.title('Adversarial Losses')
@@ -127,9 +151,10 @@ def plot_losses(losses, save_path='./results/'):
     plt.plot(epochs, losses[:, 7], color='red', label='Synthetic Discriminator')
     plt.legend(loc='upper right')
     plt.savefig(os.path.join(save_path, 'adversarial'))
+    plt.close()
 
 
-def save(a, b1, b2, b3, gen_imgs, batch, epoch, base_path='./results/', remove_existing=False):
+def save(a, b1, b2, b3, gen_imgs, batch, epoch, base_path='./results/train/', remove_existing=False):
     '''
         Save the generated images.
     '''

@@ -11,6 +11,7 @@ from tensorflow.keras.layers import (
     Input,
     Reshape,
     Dense,
+    UpSampling2D,
     Conv2D,
     Conv2DTranspose,
     ZeroPadding2D,
@@ -101,7 +102,7 @@ def get_bottleneck(dim=128, noise_std=0.):
     return result
 
 
-def get_encoder(noise_std, bottleneck_dim=128):
+def get_encoder(noise_std, bottleneck_dim=128, img_size=(128, 128)):
     '''
         The shared encoder.
         In the case of the faces dataset,
@@ -118,7 +119,7 @@ def get_encoder(noise_std, bottleneck_dim=128):
         downsample(512, 4), # (bs, 8, 8, 512)
         downsample(512, 4), # (bs, 4, 4, 512)
         downsample(512, 4), # (bs, 2, 2, 512)
-        downsample(512, 4), # (bs, 1, 1, 512)
+        downsample(512, 4) # (bs, 1, 1, 512)
     ]
 
     bottleneck = get_bottleneck(dim=bottleneck_dim, noise_std=noise_std)
@@ -126,26 +127,34 @@ def get_encoder(noise_std, bottleneck_dim=128):
     return encoder, bottleneck
 
 
-def get_decoder():
+def get_decoder(img_size=(128, 128)):
     '''
         The decoder architecture.
-        In the case of the faces dataset,
-        we want to end up with a shape of (128, 128, 3).
     '''
-    return [
-        upsample(512, 4, apply_dropout=True), # (bs, 2, 2, 1024)
-        upsample(512, 4, apply_dropout=True), # (bs, 4, 4, 1024)
-        upsample(512, 4), # (bs, 8, 8, 1024)
-        upsample(256, 4), # (bs, 16, 16, 512)
-        upsample(128, 4), # (bs, 32, 32, 256)
-        upsample(64, 4), # (bs, 64, 64, 128)
-        Conv2DTranspose(3,
-                        4,
-                        strides=2,
-                        padding='same',
-                        kernel_initializer=random_normal_initializer(0., .02),
-                        activation='tanh') # (bs, 128, 128, 3)
-    ]
+    if img_size[0] == 128:
+        decoder = [
+            upsample(512, 4), # (bs, 2, 2, 512)
+            upsample(512, 4), # (bs, 4, 4, 512)
+            upsample(512, 4), # (bs, 8, 8, 512)
+            upsample(256, 4), # (bs, 16, 16, 256)
+            upsample(128, 4), # (bs, 32, 32, 128)
+            upsample(64, 4) # (bs, 64, 64, 64)
+        ]
+    elif img_size[0] == 32:
+        decoder = [
+            upsample(512, 4), # (bs, 2, 2, 512)
+            upsample(256, 4), # (bs, 4, 4, 512)
+            upsample(128, 4), # (bs, 8, 8, 256)
+            upsample(64, 4) # (bs, 16, 16, 128)
+        ]
+    else:
+        raise ValueError('Incompatible image size.')
+
+    return decoder
+
+    # up_to = np.log2(img_size[0]) - 1
+
+    # return full_size_decoder[:up_to]
 
 
 def generator(encoder, decoder, img_size=(128, 128)):
@@ -157,10 +166,9 @@ def generator(encoder, decoder, img_size=(128, 128)):
             decoder : The real or the synthetic decoder.
     '''
     inputs = Input(shape=[2*img_size[0], img_size[1], 3])
-    encoder_, bottleneck_ = encoder
-    
     x1, x2 = inputs[:, :img_size[0], :, :], inputs[:, img_size[0]:, :, :]
-    assert x1.get_shape().as_list() == x2.get_shape().as_list()
+
+    encoder_, bottleneck_ = encoder
 
     for down in encoder_:
         x1 = down(x1)
@@ -182,6 +190,13 @@ def generator(encoder, decoder, img_size=(128, 128)):
     for up in decoder:
         x = up(x)
 
+    x = Conv2DTranspose(3,
+                        4,
+                        strides=2,
+                        padding='same',
+                        kernel_initializer=random_normal_initializer(0., .02),
+                        activation='tanh')(x) # (bs, img_size[0], img_size[1], 3)
+
     return Model(inputs=inputs, outputs=x)
 
 
@@ -191,29 +206,27 @@ def pix2pix_discriminator():
     '''
     initializer = random_normal_initializer(0., .02)
 
-    inputs = Input(shape=[None, None, 3], name='input_image')
+    inputs = Input(shape=[None, None, 3])
     x = inputs
 
-    down1 = downsample(64, 4, False)(x) # (bs, 64, 64, 64)
-    down2 = downsample(128, 4)(down1) # (bs, 32, 32, 128)
-    down3 = downsample(256, 4)(down2) # (bs, 16, 16, 256)
+    x = downsample(64, 4, False)(x) # (bs, 64, 64, 64)
+    x = downsample(128, 4)(x) # (bs, 32, 32, 128)
+    x = downsample(256, 4)(x) # (bs, 16, 16, 256)
 
-    zero_pad1 = ZeroPadding2D()(down3) # (bs, 18, 18, 256)
-    conv = Conv2D(512,
-                  4,
-                  strides=1,
-                  kernel_initializer=initializer,
-                  use_bias=False)(zero_pad1) # (bs, 15, 15, 512)
+    x = ZeroPadding2D()(x) # (bs, 18, 18, 256)
+    x = Conv2D(512,
+               4,
+               strides=1,
+               kernel_initializer=initializer,
+               use_bias=False)(x) # (bs, 15, 15, 512)
 
-    norm1 = BatchNormalization()(conv)
+    x = BatchNormalization()(x)
+    x = LeakyReLU()(x)
 
-    leaky_relu = LeakyReLU()(norm1)
+    x = ZeroPadding2D()(x) # (bs, 17, 17, 512)
+    x = Conv2D(1,
+               4,
+               strides=1,
+               kernel_initializer=initializer)(x) # (bs, 14, 14, 1)
 
-    zero_pad2 = ZeroPadding2D()(leaky_relu) # (bs, 17, 17, 512)
-
-    last = Conv2D(1,
-                  4,
-                  strides=1,
-                  kernel_initializer=initializer)(zero_pad2) # (bs, 14, 14, 1)
-
-    return Model(inputs=inputs, outputs=last)
+    return Model(inputs=inputs, outputs=x)

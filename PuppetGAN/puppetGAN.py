@@ -17,7 +17,7 @@ class PuppetGAN:
     def __init__(self, img_size=(128, 128), noise_std=.2, bottleneck_noise=0.):
         # the desired size of the images
         # it doesn't have to be equal to the input size
-        # every input will be resized to img_size
+        # every input will be resized to this value
         self.img_size = img_size
 
         # the standard deviation of the noise
@@ -34,9 +34,10 @@ class PuppetGAN:
         self.gan_loss = tf.keras.losses.MeanSquaredError()
 
         # create the shared encoder
-        self.encoder = m.get_encoder(self.bottleneck_noise)
+        self.encoder = m.get_encoder(self.bottleneck_noise, img_size=self.img_size)
         # create the decoders
-        self.decoder_real, self.decoder_synth = m.get_decoder(), m.get_decoder()
+        self.decoder_real = m.get_decoder(img_size=self.img_size)
+        self.decoder_synth = m.get_decoder(img_size=self.img_size)
 
         # initialize the GANs
         self.gen_real, self.gen_real_opt, self.gen_real_grads = None, None, None
@@ -81,15 +82,19 @@ class PuppetGAN:
                                    discriminator_real_optimizer=self.disc_real_opt,
                                    discriminator_synth_optimizer=self.disc_synth_opt)
 
-        ckpt_manager = tf.train.CheckpointManager(ckpt, path, max_to_keep=2)
+        ckpt_manager = tf.train.CheckpointManager(ckpt, path, max_to_keep=5)
 
         return ckpt, ckpt_manager
 
 
-    def restore_checkpoint(self):
-        if self.ckpt_manager.latest_checkpoint:
-            self.ckpt.restore(self.ckpt_manager.latest_checkpoint)
-            print('Latest checkpoint restored!')
+    def restore_checkpoint(self, path='./checkpoints/train', ckpt=-1):
+        if ckpt == -1:
+            if self.ckpt_manager.latest_checkpoint:
+                self.ckpt.restore(self.ckpt_manager.latest_checkpoint)
+                print('Latest checkpoint restored!')
+        else:
+            self.ckpt.restore(os.path.join(path, ckpt))
+            print(f'Restored checkpoint {ckpt}!')
 
 
     def init_generator(self, encoder, decoder, img_size, lr=2e-4, beta_1=.5):
@@ -157,7 +162,7 @@ class PuppetGAN:
 
 
     @tf.function # enable eager execution for faster run times
-    def train_step(self, a, b1, b2, b3):
+    def train_step(self, a, b1, b2, b3, use_roids):
         '''
             Performs one training step.
 
@@ -301,9 +306,6 @@ class PuppetGAN:
             gen_synth_loss += self.generator_loss(self.disc_synth(b3_hat_star))
             disc_synth_loss += self.discriminator_loss(self.disc_synth(b3), self.disc_synth(b3_hat_star))
 
-            # weight L(f(a, b1)=b3)
-            attr_cycle_loss_b_star *= attr_cycle_weight_b_star
-
             # (b1, a) -> b -> a
             b_tilde = self.gen_synth(tf.concat([b1, a], axis=1), training=True)
             b_tilde_noisy = utils.make_noisy(b_tilde, stddev=self.noise_std)
@@ -314,6 +316,25 @@ class PuppetGAN:
             disc_synth_loss += self.discriminator_loss(self.disc_synth(b1), self.disc_synth(b_tilde))
             gen_real_loss += self.generator_loss(self.disc_real(a_hat_star))
             disc_real_loss += self.discriminator_loss(self.disc_real(a), self.disc_real(a_hat_star))
+
+
+            # some extra constraints on the Attribute CycleGAN
+            if use_roids:
+                # add new a loss
+                a_tilde_star = self.gen_real(tf.concat([a_tilde_noisy, a], axis=1), training=True)
+                
+                attr_cycle_loss_a_star += self.supervised_loss(a, a_tilde_star)
+                gen_real_loss += self.generator_loss(self.disc_real(a_tilde_star))
+
+                # add new b loss
+                b_tilde_star = self.gen_real(tf.concat([b_tilde_noisy, b1], axis=1), training=True)
+                
+                attr_cycle_loss_b_star += self.supervised_loss(b1, b_tilde_star)
+                gen_real_loss += self.generator_loss(self.disc_real(b_tilde_star))
+
+
+            # weight L(f(a, b1)=b3)
+            attr_cycle_loss_b_star *= attr_cycle_weight_b_star
 
             # weight L(g(b1, a)=a)
             attr_cycle_loss_a_star *= attr_cycle_weight_a_star
@@ -384,7 +405,8 @@ class PuppetGAN:
             batch_size=30,
             epochs=500,
             save_model_every=5,
-            save_images_every=1):
+            save_images_every=1, 
+            use_roids=False):
         '''
             The training function.
 
@@ -396,6 +418,7 @@ class PuppetGAN:
                 epochs            : The number of epochs.
                 save_model_every  : Every how many epochs to create a new checkpoint.
                 save_images_every : Every how many epochs to save the outputs of the model.
+                use_roids         : Whether or not to use extra conditions, other than the ones of the paper.
         '''
 
         losses = np.empty((0, 8), float)
@@ -425,7 +448,7 @@ class PuppetGAN:
                 # split b to b1, b2 and b3
                 b1, b2, b3 = utils.split_to_attributes(b)
 
-                batch_losses, generated_images = self.train_step(a, b1, b2, b3)
+                batch_losses, generated_images = self.train_step(a, b1, b2, b3, use_roids)
                 batch_losses = [
                     batch_losses['reconstruction'],
                     batch_losses['disentanglement'],
@@ -459,44 +482,25 @@ class PuppetGAN:
             print(f'\n\tTime taken for epoch {epoch}: {time()-start}sec.')
 
 
-    def get_face_rows(self,
-                      base_path='../data/mouth/rows_',
-                      target_path='face_rows'):
+    def eval(self,
+             base_path='../data/mouth/rows_',
+             target_path='./results/test/'):
         '''
             Create face rows like the ones from the paper for evaluation.
         '''
         if not os.path.exists(target_path):
             os.makedirs(target_path)
 
-        alphas, betas = [], []
-
         alphas_path = os.path.join(base_path, 'real')
         betas_path = os.path.join(base_path, 'synth')
 
-        for file in os.listdir(alphas_path):
-            if file.endswith('.png'):
-                img = PIL.Image.open(os.path.join(alphas_path, file)).convert('RGB')
-                img = np.array(img)
-                img = tf.convert_to_tensor(img)
-                img = utils.normalize(img)
-
-                alphas.append(img)
-        alphas = tf.convert_to_tensor(alphas)
-
-        for file in os.listdir(betas_path):
-            if file.endswith('.png'):
-                img = PIL.Image.open(os.path.join(betas_path, file)).convert('RGB')
-                img = np.array(img)
-                img = tf.convert_to_tensor(img)
-                img = utils.normalize(img)
-
-                betas.append(img)
-        betas = tf.convert_to_tensor(betas)
+        # load the rows
+        alphas = utils.load_test_data(alphas_path)
+        betas = utils.load_test_data(betas_path)
 
         i = 0
         for b1_file in betas:
             i += 1
-            print(i)
 
             result = np.concatenate([a for a in alphas], axis=1)
             result = np.concatenate((np.zeros(self.img_size + (3,)), result), axis=1)
@@ -521,3 +525,5 @@ class PuppetGAN:
 
             result = utils.denormalize(result)
             plt.imsave(os.path.join(target_path, f'{i}.png'), result)
+
+            print('Saved grid: ', i)
