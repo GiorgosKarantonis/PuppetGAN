@@ -1,7 +1,8 @@
 '''
-    Adapted from:
+    Part of the scipt is adapted from:
     github.com/tensorflow/examples/blob/master/tensorflow_examples/models/pix2pix/pix2pix.py
 '''
+
 import numpy as np
 
 from tensorflow import split, random_normal_initializer
@@ -11,11 +12,9 @@ from tensorflow.keras.layers import (
     Input,
     Reshape,
     Dense,
-    UpSampling2D,
     Conv2D,
     Conv2DTranspose,
     ZeroPadding2D,
-    Dropout,
     BatchNormalization,
     ReLU,
     LeakyReLU,
@@ -27,13 +26,13 @@ from tensorflow.keras.layers import (
 
 def downsample(filters, size, apply_norm=True):
     '''
-        A downsampling layer.
+        A downsampling block.
 
         args:
-            filters    : The number of filters in the layer's output.
-            size       : The size of the kernel.
-            apply_norm : Whether or not to add Batch Normalization
-                         at the output of the downsampling layer.
+            filters    : the number of filters in the layer's output
+            size       : the size of the kernel
+            apply_norm : whether or not to add Batch Normalization
+                         at the output of the downsampling layer
     '''
     initializer = random_normal_initializer(0., .02)
 
@@ -53,15 +52,13 @@ def downsample(filters, size, apply_norm=True):
     return result
 
 
-def upsample(filters, size, apply_dropout=False):
+def upsample(filters, size):
     '''
-        An upsampling layer.
+        An upsampling block.
 
         args:
-            filters       : The number of filters in the layer's output.
-            size          : The size of the kernel.
-            apply_dropout : Whether or not to add Dropout
-                            at the output of the upsampling layer.
+            filters       : the number of filters in the layer's output
+            size          : the size of the kernel
     '''
     initializer = random_normal_initializer(0., .02)
 
@@ -74,10 +71,6 @@ def upsample(filters, size, apply_dropout=False):
                                use_bias=False))
 
     result.add(BatchNormalization())
-
-    if apply_dropout:
-        result.add(Dropout(.5))
-
     result.add(ReLU())
 
     return result
@@ -88,9 +81,12 @@ def get_bottleneck(dim=128, noise_std=0.):
         Create the bottleneck.
 
         args:
-            dim       : The size of the bottleneck.
-            noise_std : The standard deviation of the Gaussian Noise
-                        added to the output of the bottleneck.
+            dim       : the size of the bottleneck
+            noise_std : the standard deviation of the Gaussian Noise
+                        added to the output of the bottleneck
+
+        returns:
+            the bottleneck model
     '''
     assert dim % 2 == 0
 
@@ -102,24 +98,28 @@ def get_bottleneck(dim=128, noise_std=0.):
     return result
 
 
-def get_encoder(noise_std, bottleneck_dim=128, img_size=(128, 128)):
+def get_encoder(noise_std=0, bottleneck_dim=128):
     '''
         The shared encoder.
+        
         In the case of the faces dataset,
-        we start with a shape of (128, 128, 3).
+        we start with a shape of (bs, 128, 128, 3)
+        and we end up with a shape of (bs, 4, 4, 512).
+
+        In the case of the digits dataset,
+        we start with a shape of (bs, 32, 32, 3)
+        and we end up with a shape of (bs, 1, 1, 512).
 
         args:
-            noise_std      : The std of the bottleneck noise.
-            bottleneck_dim : The size of the bottleneck.
+            noise_std      : the std of the bottleneck noise
+            bottleneck_dim : the size of the bottleneck
     '''
     encoder = [
-        downsample(64, 4, apply_norm=False), # (bs, 64, 64, 64)
-        downsample(128, 4), # (bs, 32, 32, 128)
-        downsample(256, 4), # (bs, 16, 16, 256)
-        downsample(512, 4), # (bs, 8, 8, 512)
-        downsample(512, 4), # (bs, 4, 4, 512)
-        downsample(512, 4), # (bs, 2, 2, 512)
-        downsample(512, 4) # (bs, 1, 1, 512)
+        downsample(64, 4, apply_norm=False), # (bs, 64, 64, 64) or (bs, 16, 16, 64)
+        downsample(128, 4), # (bs, 32, 32, 128) or (bs, 8, 8, 128)
+        downsample(256, 4), # (bs, 16, 16, 256) or (bs, 4, 4, 512)
+        downsample(512, 4), # (bs, 8, 8, 512) or (bs, 2, 2, 512)
+        downsample(512, 4), # (bs, 4, 4, 512) or (bs, 1, 1, 512)
     ]
 
     bottleneck = get_bottleneck(dim=bottleneck_dim, noise_std=noise_std)
@@ -127,34 +127,18 @@ def get_encoder(noise_std, bottleneck_dim=128, img_size=(128, 128)):
     return encoder, bottleneck
 
 
-def get_decoder(img_size=(128, 128)):
+def get_decoder():
     '''
         The decoder architecture.
     '''
-    if img_size[0] == 128:
-        decoder = [
-            upsample(512, 4), # (bs, 2, 2, 512)
-            upsample(512, 4), # (bs, 4, 4, 512)
-            upsample(512, 4), # (bs, 8, 8, 512)
-            upsample(256, 4), # (bs, 16, 16, 256)
-            upsample(128, 4), # (bs, 32, 32, 128)
-            upsample(64, 4) # (bs, 64, 64, 64)
-        ]
-    elif img_size[0] == 32:
-        decoder = [
-            upsample(512, 4), # (bs, 2, 2, 512)
-            upsample(256, 4), # (bs, 4, 4, 512)
-            upsample(128, 4), # (bs, 8, 8, 256)
-            upsample(64, 4) # (bs, 16, 16, 128)
-        ]
-    else:
-        raise ValueError('Incompatible image size.')
+    decoder = [
+        upsample(512, 4), # (bs, 8, 8, 512) or (bs, 2, 2, 512)
+        upsample(256, 4), # (bs, 16, 16, 256) or (bs, 4, 4, 512)
+        upsample(128, 4), # (bs, 32, 32, 128) or (bs, 8, 8, 256)
+        upsample(64, 4) # (bs, 64, 64, 64) or (bs, 16, 16, 128)
+    ]
 
     return decoder
-
-    # up_to = np.log2(img_size[0]) - 1
-
-    # return full_size_decoder[:up_to]
 
 
 def generator(encoder, decoder, img_size=(128, 128)):
@@ -162,8 +146,8 @@ def generator(encoder, decoder, img_size=(128, 128)):
         The generator architecture.
 
         args:
-            encoder : The shared encoder.
-            decoder : The real or the synthetic decoder.
+            encoder : the shared encoder
+            decoder : the real or the synthetic decoder
     '''
     inputs = Input(shape=[2*img_size[0], img_size[1], 3])
     x1, x2 = inputs[:, :img_size[0], :, :], inputs[:, img_size[0]:, :, :]
@@ -209,12 +193,12 @@ def pix2pix_discriminator():
     inputs = Input(shape=[None, None, 3])
     x = inputs
 
-    x = downsample(64, 4, False)(x) # (bs, 64, 64, 64)
-    x = downsample(128, 4)(x) # (bs, 32, 32, 128)
-    x = downsample(256, 4)(x) # (bs, 16, 16, 256)
+    x = downsample(int(64 * 2), 4, False)(x) # (bs, 64, 64, 64)
+    x = downsample(int(128 * 2), 4)(x) # (bs, 32, 32, 128)
+    x = downsample(int(256 * 2), 4)(x) # (bs, 16, 16, 256)
 
     x = ZeroPadding2D()(x) # (bs, 18, 18, 256)
-    x = Conv2D(512,
+    x = Conv2D(int(512 * 2),
                4,
                strides=1,
                kernel_initializer=initializer,

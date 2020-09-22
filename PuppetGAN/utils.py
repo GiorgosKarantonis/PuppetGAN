@@ -1,6 +1,6 @@
 import os
-from itertools import islice
 
+import imageio
 import PIL.Image
 from matplotlib import pyplot as plt
 
@@ -11,10 +11,13 @@ import tensorflow as tf
 
 def normalize(img):
     '''
-        Normalize, in [-1, 1], images of shape [batch_size, height, width, filters].
+        Normalizes, in [-1, 1], images of shape [batch_size, height, width, filters].
 
         args:
-            img : The images to normalize.
+            img : the images to normalize
+
+        returns:
+            the normalized images
     '''
     img = tf.cast(img, tf.float32)
     img = (img / 127.5) - 1
@@ -24,10 +27,13 @@ def normalize(img):
 
 def denormalize(img):
     '''
-        De-normalize images of shape [batch_size, height, width, filters].
+        Projects, images of shape [batch_size, height, width, filters], to [0, 1].
 
         args:
-            img : The images to de-normalize.
+            img : the images to de-normalize
+
+        returns:
+            the de-normalized images
     '''
     return ((img + 1) * 127.5) / 255
 
@@ -37,7 +43,12 @@ def split_to_attributes(img):
         Split b to b1, b2 and b3.
         
         args:
-            img : The images, of shape [batch_size, height, width, filters], to split.
+            img : the images, of shape [batch_size, height, width, filters], to split
+
+        returns:
+            attr : the image that contains the AoI
+            rest : the image that contains all the attributes other than the AoI
+            both : the image that contains all the attributes
     '''
     window = int(img.shape[1] / 3)
 
@@ -52,12 +63,15 @@ def get_batch_flow(path, target_size, batch_size):
     '''
         Create a flow of minibatches.
         Ideally tf.keras.preprocessing.image_dataset_from_directory would be used,
-        but the cloud's tensorflow version didn't support it.
+        but my cloud's tensorflow version didn't support it.
 
         args:
-            path        : The path where the dataset is stored.
-            target_size : The size of the images.
-            batch_size  : The size of the mini-batch.
+            path        : the path where the dataset is stored
+            target_size : the size of the images
+            batch_size  : the size of the mini-batch
+
+        returns:
+            the flow of batches
     '''
     generator = tf.keras.preprocessing.image.ImageDataGenerator()
 
@@ -74,6 +88,9 @@ def load_test_data(path):
 
         args:
             path : the path where the rows are saved at
+
+        returns:
+            a tensor containing the evaluation images
     '''
     data = []
 
@@ -95,13 +112,72 @@ def make_noisy(img, mean=0., stddev=.01):
         Add noise to an image.
 
         args:
-            img    : The images to add the noise to.
-            mean   : The mean of the noise distribution.
-            stddev : The standard deviation of the noise distribution.
+            img    : the images to add the noise to
+            mean   : the mean of the noise distribution
+            stddev : the standard deviation of the noise distribution
+
+        returns:
+            the noisy images
     '''
     noise = tf.random.normal(img.shape, mean=mean, stddev=stddev)
 
     return img + noise
+
+
+def rows_to_gif(img,
+                img_size=128,
+                target_path='gif',
+                gif_name='row_gif',
+                header=True,
+                start_row=3,
+                end_row=2,
+                duration=.2):
+    '''
+        Converts an image of evaluation rows to gif.
+
+        args:
+            img         : the image of the evaluation rows
+            img_size    : the size of each of the images in the rows
+            target_path : where to save the gif
+            gif_name    : the name of the output gif
+            header      : whether or not to always show to real images
+            start_row   : how many rows, from the beggining, to skip
+            end_row     : how many rows, from the end, to skip
+            duration    : for how many msec to show each row
+    '''
+    if not os.path.exists(target_path):
+        os.makedirs(target_path)
+
+    image_seq = []
+
+    if header:
+        if start_row == 0:
+            start_row = 1
+
+        header_img = []
+        for j in range(int(img.shape[1]/img_size)):
+            cur_img = img[:img_size, j*img_size:(j+1)*img_size, :]
+            header_img.append(cur_img)
+
+        header_img = np.concatenate([cur_img for cur_img in header_img], axis=1)
+
+    for i in range(start_row, int(img.shape[0]/img_size) - end_row):
+        col_seq = []
+        
+        for j in range(int(img.shape[1]/img_size)):
+            cur_img = img[i*img_size:(i+1)*img_size, j*img_size:(j+1)*img_size, :]
+            col_seq.append(cur_img)
+
+        col_seq = np.concatenate([cur_img for cur_img in col_seq], axis=1)
+
+        if header:
+            col_seq = np.concatenate((header_img, col_seq), axis=0)
+
+        image_seq.append((col_seq * 255).astype('uint8'))
+
+    imageio.mimsave(os.path.join(target_path, f'{gif_name}.gif'),
+                    image_seq,
+                    duration=duration)
 
 
 def print_losses(losses):

@@ -1,0 +1,26 @@
+{
+	"comments" : "Keep here any info you may want about the current configuration :)",
+
+	"dataset" : "mnist",
+	"dataset info" : "choose between 'mnist', 'usps', 'mouth' and 'light'",
+
+	"epochs" : 500,
+	"noise std" : 0.2,
+	"bottleneck noise" : 0,
+	
+	"on roids" : false,
+
+	"digits" : {
+		"batch size" : 200,
+		"image size" : [32, 32],
+		"save images every" : 50,
+		"save model every" : 50
+	},
+
+	"faces" : {
+		"batch size" : 30,
+		"image size" : [128, 128],
+		"save images every" : 20,
+		"save model every" : 20
+	}
+}

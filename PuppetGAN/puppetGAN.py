@@ -5,7 +5,6 @@ from itertools import islice
 import numpy as np
 import tensorflow as tf
 
-import PIL.Image
 from matplotlib import pyplot as plt
 
 import utils
@@ -34,10 +33,10 @@ class PuppetGAN:
         self.gan_loss = tf.keras.losses.MeanSquaredError()
 
         # create the shared encoder
-        self.encoder = m.get_encoder(self.bottleneck_noise, img_size=self.img_size)
+        self.encoder = m.get_encoder(self.bottleneck_noise)
         # create the decoders
-        self.decoder_real = m.get_decoder(img_size=self.img_size)
-        self.decoder_synth = m.get_decoder(img_size=self.img_size)
+        self.decoder_real = m.get_decoder()
+        self.decoder_synth = m.get_decoder()
 
         # initialize the GANs
         self.gen_real, self.gen_real_opt, self.gen_real_grads = None, None, None
@@ -125,9 +124,9 @@ class PuppetGAN:
             By default the Mean Squared Error is used. 
 
             args:
-                real      : The real image.
-                generated : The generated image.
-                weight    : The weight of the discriminator loss.
+                real      : the real image
+                generated : the generated image
+                weight    : the weight of the discriminator loss
         '''
         return weight * self.gan_loss(tf.ones_like(generated), generated)
 
@@ -138,9 +137,9 @@ class PuppetGAN:
             By default the Mean Squared Error is used. 
 
             args:
-                real      : The real image.
-                generated : The generated image.
-                weight    : The weight of the discriminator loss.
+                real      : the real image
+                generated : the generated image
+                weight    : the weight of the discriminator loss
         '''
         loss_real = self.gan_loss(tf.ones_like(real), real)
         loss_generated = self.gan_loss(tf.zeros_like(generated), generated)
@@ -154,9 +153,9 @@ class PuppetGAN:
             By default the Mean Absolute Error is used. 
 
             args:
-                real      : The real image.
-                generated : The generated image.
-                weight    : The weight of the supervised loss.
+                real      : the real image
+                generated : the generated image
+                weight    : the weight of the supervised loss
         '''
         return weight * self.sup_loss(real, generated)
 
@@ -167,13 +166,15 @@ class PuppetGAN:
             Performs one training step.
 
             args:
-                a  : The images from the real domain.
-                b1 : The images from the synthetic domain
-                     where only the AoI is present.
-                b2 : The images from the synthetic domain
-                     where all the attributes, except the AoI, are present.
-                b3 : The images from the synthetic domain
-                     where all the attributes are present.
+                a         : the images from the real domain
+                b1        : the images from the synthetic domain
+                            where only the AoI is present
+                b2        : the images from the synthetic domain
+                            where all the attributes, except the AoI, are present
+                b3        : the images from the synthetic domain
+                            where all the attributes are present
+                use_roids : a boolean variable indicating whether or not
+                            to use additional conditions
 
             returns:
                 a dictionary containing all the losses.
@@ -362,7 +363,6 @@ class PuppetGAN:
                               attr_cycle_loss_b_star + \
                               attr_cycle_loss_a_star
 
-
         # calculate the gradients
         self.gen_real_grads = tape.gradient(gen_real_loss, self.gen_real.trainable_variables)
         self.disc_real_grads = tape.gradient(disc_real_loss, self.disc_real.trainable_variables)
@@ -402,6 +402,7 @@ class PuppetGAN:
     def fit(self,
             path_real,
             path_synth,
+            path_eval=None,
             batch_size=30,
             epochs=500,
             save_model_every=5,
@@ -411,14 +412,14 @@ class PuppetGAN:
             The training function.
 
             args:
-                path_real         : The path containing the images from the real domain are stored.
-                path_synth        : The path where the images from the real domain are stored.
-                img_size          : The size of the images. It's used to deal with different datasets.
-                batch_size        : The size of the mini-batch.
-                epochs            : The number of epochs.
-                save_model_every  : Every how many epochs to create a new checkpoint.
-                save_images_every : Every how many epochs to save the outputs of the model.
-                use_roids         : Whether or not to use extra conditions, other than the ones of the paper.
+                path_real         : the path containing the images from the real domain are stored
+                path_synth        : the path where the images from the real domain are stored
+                img_size          : the size of the images. It's used to deal with different datasets
+                batch_size        : the size of the mini-batch
+                epochs            : the number of epochs
+                save_model_every  : every how many epochs to create a new checkpoint
+                save_images_every : every how many epochs to save the outputs of the model
+                use_roids         : whether or not to use extra conditions, other than the ones of the paper
         '''
 
         losses = np.empty((0, 8), float)
@@ -469,27 +470,41 @@ class PuppetGAN:
             # save only the images from the last batch to save space
             if save_images_every:
                 if epoch % save_images_every == 0 or epoch + 1 == epochs:
+                    if path_eval:
+                        self.eval(base_path=path_eval, target_folder=epoch)
+                    print(f'\tSaved evaluation rows and gifs for epoch {epoch}!')
+                    
                     utils.plot_losses(losses)
                     utils.save(a, b1, b2, b3, generated_images, i, epoch, remove_existing=False)
-                    print(f'\n\tSaved losses and images for epoch {epoch}!\n')
+                    print(f'\tSaved losses and images for epoch {epoch}!')
 
             if save_model_every:
                 if epoch % save_model_every == 0 or epoch + 1 == epochs:
                     ckpt_path = self.ckpt_manager.save()
-                    print(f'\tSaving checkpoint for epoch {epoch} at {ckpt_path}\n')
+                    print(f'\tSaved checkpoint for epoch {epoch} at {ckpt_path}!\n')
 
             utils.print_losses(epoch_losses)
             print(f'\n\tTime taken for epoch {epoch}: {time()-start}sec.')
 
 
     def eval(self,
-             base_path='../data/mouth/rows_',
-             target_path='./results/test/'):
+             base_path,
+             target_path='results/test',
+             target_folder=None,
+             sample=6):
         '''
-            Create face rows like the ones from the paper for evaluation.
+            Create rows of data like the ones from the paper for evaluation.
         '''
-        if not os.path.exists(target_path):
-            os.makedirs(target_path)
+        print('\n\tCreating evaluation rows.')
+
+        if target_folder is not None:
+            target_path = os.path.join(target_path, str(target_folder))
+
+        if not os.path.exists(os.path.join(target_path, 'images')):
+            os.makedirs(os.path.join(target_path, 'images'))
+
+        if not os.path.exists(os.path.join(target_path, 'gifs')):
+            os.makedirs(os.path.join(target_path, 'gifs'))
 
         alphas_path = os.path.join(base_path, 'real')
         betas_path = os.path.join(base_path, 'synth')
@@ -501,6 +516,8 @@ class PuppetGAN:
         i = 0
         for b1_file in betas:
             i += 1
+            if sample is not None and i > sample:
+                return
 
             result = np.concatenate([a for a in alphas], axis=1)
             result = np.concatenate((np.zeros(self.img_size + (3,)), result), axis=1)
@@ -524,6 +541,10 @@ class PuppetGAN:
                 result = np.concatenate((result, new_result_row), axis=0)
 
             result = utils.denormalize(result)
-            plt.imsave(os.path.join(target_path, f'{i}.png'), result)
+            plt.imsave(os.path.join(target_path, 'images', f'{i}.png'), result)
+            utils.rows_to_gif(result,
+                              img_size=self.img_size[0],
+                              target_path=os.path.join(target_path, 'gifs'),
+                              gif_name=i)
 
-            print('Saved grid: ', i)
+            print(f'\t\tSaved evaluation result: {i}\r', end='')
