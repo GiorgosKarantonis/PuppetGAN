@@ -1,0 +1,1 @@
+wget -c http://cs-people.bu.edu/giorgos/puppetgan/data.tar.gz -O - | tar -xz  -C ./
