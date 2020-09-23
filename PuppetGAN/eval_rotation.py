@@ -20,7 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-# Part of the scipt is adapted from:
+# Parts of this scipt are adapted from:
 # https://www.tensorflow.org/datasets/keras_example
 # These parts are subject to:
 # Copyright 2020 The TensorFlow Datasets Authors, Licensed under the Apache License, Version 2.0

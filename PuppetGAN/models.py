@@ -20,7 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-# Part of the scipt is adapted from:
+# Parts of this scipt are adapted from:
 # github.com/tensorflow/examples/blob/master/tensorflow_examples/models/pix2pix/pix2pix.py
 # These parts are subject to:
 # Copyright 2019 The TensorFlow Authors. Licensed under the Apache License, Version 2.0 (the "License");
