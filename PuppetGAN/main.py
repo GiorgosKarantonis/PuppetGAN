@@ -52,7 +52,7 @@ def main(test, ckpt):
     puppet_GAN = puppet.PuppetGAN(img_size=IMG_SIZE,
                                   noise_std=NOISE_STD,
                                   bottleneck_noise=BOTTLENECK_NOISE)
-
+    
     puppet_GAN.restore_checkpoint(ckpt=ckpt)
 
     if test:

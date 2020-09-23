@@ -1,6 +1,8 @@
 import os
 from time import time
+from datetime import datetime
 from itertools import islice
+from contextlib import redirect_stdout
 
 import numpy as np
 import tensorflow as tf
@@ -13,7 +15,7 @@ import models as m
 
 
 class PuppetGAN:
-    def __init__(self, img_size=(128, 128), noise_std=.2, bottleneck_noise=0.):
+    def __init__(self, img_size=(128, 128), noise_std=.2, bottleneck_noise=0., save_summary=True):
         # the desired size of the images
         # it doesn't have to be equal to the input size
         # every input will be resized to this value
@@ -35,8 +37,8 @@ class PuppetGAN:
         # create the shared encoder
         self.encoder = m.get_encoder(self.bottleneck_noise)
         # create the decoders
-        self.decoder_real = m.get_decoder()
-        self.decoder_synth = m.get_decoder()
+        self.decoder_real = m.get_decoder(prefix='Real')
+        self.decoder_synth = m.get_decoder(prefix='Synthetic')
 
         # initialize the GANs
         self.gen_real, self.gen_real_opt, self.gen_real_grads = None, None, None
@@ -50,10 +52,60 @@ class PuppetGAN:
 
         self.ckpt, self.ckpt_manager = self.define_checkpoints()
 
+        if save_summary:
+            self.log_config()
+
+
+    def log_config(self, target_path='results', file_name='config'):
+        '''
+            Creates and saves a report 
+            of the model's architecture and its parameters.
+
+            args:
+                target_path : where to save the report
+                file_name   : the name of the report file.
+                              the extension is set automatically to .txt
+        '''
+        if not os.path.exists(target_path):
+            os.makedirs(target_path)
+
+        with open(os.path.join(target_path, f'{file_name}.txt'), 'w') as config_f:
+            config_f.write(f'{datetime.now()}\n')
+            config_f.write(f"{'-' * 65}\n\n")
+
+            hyperparams_log = 'HYPERPARAMS\n'
+            hyperparams_log = f'{hyperparams_log}Image Size: {self.img_size}\n'
+            hyperparams_log = f'{hyperparams_log}Noise std: {self.noise_std}\n'
+            hyperparams_log = f'{hyperparams_log}Bottleneck Noise: {self.bottleneck_noise}\n'
+            hyperparams_log = f"{hyperparams_log}{'-' * 65}\n"
+            hyperparams_log = f'{hyperparams_log}\n\n'
+            config_f.write(hyperparams_log)
+
+            with redirect_stdout(config_f):
+                for d in self.encoder[0]:
+                    d.summary()
+                    config_f.write('\n\n')
+                
+                self.encoder[1].summary()
+                config_f.write('\n\n')
+                
+                for u in self.decoder_real:
+                    u.summary()
+                    config_f.write('\n\n')
+
+                for u in self.decoder_synth:
+                    u.summary()
+                    config_f.write('\n\n')
+                
+                self.disc_real.summary()
+                config_f.write('\n\n')
+                self.disc_synth.summary()
+                config_f.write('\n\n')
+
 
     def setup_model(self):
         '''
-            Create the generators and the discriminators.
+            Creates the generators and the discriminators.
         '''
         if not self.gen_real:
             self.gen_real, self.gen_real_opt, self.gen_real_grads = self.init_generator(self.encoder, self.decoder_real, self.img_size)
@@ -62,10 +114,10 @@ class PuppetGAN:
             self.gen_synth, self.gen_synth_opt, self.gen_synth_grads = self.init_generator(self.encoder, self.decoder_synth, self.img_size)
 
         if not self.disc_real:
-            self.disc_real, self.disc_real_opt, self.disc_real_grads = self.init_discriminator()
+            self.disc_real, self.disc_real_opt, self.disc_real_grads = self.init_discriminator(name='Real_Discriminator')
 
         if not self.disc_synth:
-            self.disc_synth, self.disc_synth_opt, self.disc_synth_grads = self.init_discriminator()
+            self.disc_synth, self.disc_synth_opt, self.disc_synth_grads = self.init_discriminator(name='Synthetic_Discriminator')
 
 
     def define_checkpoints(self, path='./checkpoints/train'):
@@ -98,7 +150,7 @@ class PuppetGAN:
 
     def init_generator(self, encoder, decoder, img_size, lr=2e-4, beta_1=.5):
         '''
-            Create a generator.
+            Creates a generator.
         '''
         generator = m.generator(encoder, decoder, img_size)
         optimizer = tf.keras.optimizers.Adam(lr, beta_1=beta_1)
@@ -107,11 +159,11 @@ class PuppetGAN:
         return generator, optimizer, gradients
 
 
-    def init_discriminator(self, lr=5e-5, beta_1=.5):
+    def init_discriminator(self, lr=5e-5, beta_1=.5, name=None):
         '''
-            Create a discriminator.
+            Creates a discriminator.
         '''
-        discriminator = m.pix2pix_discriminator()
+        discriminator = m.pix2pix_discriminator(name=name)
         optimizer = tf.keras.optimizers.Adam(lr, beta_1=beta_1)
         gradients = None
 
@@ -493,7 +545,16 @@ class PuppetGAN:
              target_folder=None,
              sample=6):
         '''
-            Create rows of data like the ones from the paper for evaluation.
+            Creates rows of images like the ones from the paper for evaluation.
+
+            args:
+                base_path     : where to find the images based on which
+                                the function will generate the rows
+                target_path   : where to save the output images and gifs
+                target_folder : a specific folder inside 'target_path'
+                                where the outputs will be saved
+                sample        : how many evaluation images to create;
+                                if set to 'None' it will generate all of them
         '''
         print('\n\tCreating evaluation rows.')
 
@@ -542,9 +603,12 @@ class PuppetGAN:
 
             result = utils.denormalize(result)
             plt.imsave(os.path.join(target_path, 'images', f'{i}.png'), result)
+
+            start_row = 0 if self.img_size[0] == 128 else 3
             utils.rows_to_gif(result,
                               img_size=self.img_size[0],
                               target_path=os.path.join(target_path, 'gifs'),
-                              gif_name=i)
+                              gif_name=i,
+                              start_row=start_row)
 
             print(f'\t\tSaved evaluation result: {i}\r', end='')

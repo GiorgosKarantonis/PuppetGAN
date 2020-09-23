@@ -27,15 +27,15 @@ def normalize_img(image, label):
     return tf.cast(image, tf.float32) / 255., label
 
 
-def train_lenet():
-    print('\nTraining LeNet-5...\n')
-    (ds_train, ds_test), ds_info = tfds.load(
-        'mnist',
-        split=['train', 'test'],
-        shuffle_files=True,
-        as_supervised=True,
-        with_info=True,
-    )
+def get_train_test_data():
+    '''
+        Fetches and preprocesses the mnist dataset.
+    '''
+    (ds_train, ds_test), ds_info = tfds.load('mnist',
+                                             split=['train', 'test'],
+                                             shuffle_files=True,
+                                             as_supervised=True,
+                                             with_info=True)
 
     ds_train = ds_train.map(normalize_img,
                             num_parallel_calls=tf.data.experimental.AUTOTUNE)
@@ -51,12 +51,18 @@ def train_lenet():
     ds_test = ds_test.cache()
     ds_test = ds_test.prefetch(tf.data.experimental.AUTOTUNE)
 
+    return ds_train, ds_test
+
+
+def train_lenet(save_path='./checkpoints/lenet5/ckpt'):
+    train_data, test_data = get_train_test_data()
 
     model = tf.keras.models.Sequential([
-        tf.keras.layers.Conv2D(6, (3, 3), activation='relu'),
+        tf.keras.layers.Input([28, 28, 1]),
+        tf.keras.layers.Conv2D(6, 3, activation='relu'),
         tf.keras.layers.AveragePooling2D(),
 
-        tf.keras.layers.Conv2D(16, (3, 3), activation='relu'),
+        tf.keras.layers.Conv2D(16, 3, activation='relu'),
         tf.keras.layers.AveragePooling2D(),
 
         tf.keras.layers.Flatten(),
@@ -70,9 +76,19 @@ def train_lenet():
                   optimizer=tf.keras.optimizers.Adam(0.001),
                   metrics=['accuracy'])
 
-    model.fit(ds_train,
-              epochs=3,
-              validation_data=ds_test)
+    save_checkpoint = tf.keras.callbacks.ModelCheckpoint(filepath=save_path,
+                                                         save_weights_only=True,
+                                                         verbose=1)
+
+    try:
+        model.load_weights(save_path).expect_partial()
+        print('Restored checkpoint!')
+    except:
+        print('\nTraining LeNet-5...\n')
+        model.fit(train_data,
+                  epochs=3,
+                  validation_data=test_data,
+                  callbacks=[save_checkpoint])
 
     return model
 
