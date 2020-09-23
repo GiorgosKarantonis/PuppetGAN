@@ -115,11 +115,11 @@ def get_encoder(noise_std=0, bottleneck_dim=128):
             bottleneck_dim : the size of the bottleneck
     '''
     encoder = [
-        downsample(int(64/2), 4, apply_norm=False, name='Downsampling_1'), # (bs, 64, 64, 64) or (bs, 16, 16, 64)
-        downsample(int(128/2), 4, name='Downsampling_2'), # (bs, 32, 32, 128) or (bs, 8, 8, 128)
-        downsample(int(256/2), 4, name='Downsampling_3'), # (bs, 16, 16, 256) or (bs, 4, 4, 512)
-        downsample(int(512/2), 4, name='Downsampling_4'), # (bs, 8, 8, 512) or (bs, 2, 2, 512)
-        downsample(int(512/2), 4, name='Downsampling_5'), # (bs, 4, 4, 512) or (bs, 1, 1, 512)
+        downsample(64, 4, apply_norm=False, name='Downsampling_1'), # (bs, 64, 64, 64) or (bs, 16, 16, 64)
+        downsample(128, 4, name='Downsampling_2'), # (bs, 32, 32, 128) or (bs, 8, 8, 128)
+        downsample(256, 4, name='Downsampling_3'), # (bs, 16, 16, 256) or (bs, 4, 4, 512)
+        downsample(512, 4, name='Downsampling_4'), # (bs, 8, 8, 512) or (bs, 2, 2, 512)
+        downsample(512, 4, name='Downsampling_5'), # (bs, 4, 4, 512) or (bs, 1, 1, 512)
     ]
 
     bottleneck = get_bottleneck(dim=bottleneck_dim, noise_std=noise_std)
@@ -133,12 +133,12 @@ def get_decoder(prefix=None):
     '''
     if prefix is not None:
         prefix = f'{prefix}_'
-    
+
     decoder = [
-        upsample(int(512/2), 4, name=f'{prefix}Upsampling_1'), # (bs, 8, 8, 512) or (bs, 2, 2, 512)
-        upsample(int(256/2), 4, name=f'{prefix}Upsampling_2'), # (bs, 16, 16, 256) or (bs, 4, 4, 512)
-        upsample(int(128/2), 4, name=f'{prefix}Upsampling_3'), # (bs, 32, 32, 128) or (bs, 8, 8, 256)
-        upsample(int(64/2), 4, name=f'{prefix}Upsampling_4') # (bs, 64, 64, 64) or (bs, 16, 16, 128)
+        upsample(512, 4, name=f'{prefix}Upsampling_1'), # (bs, 8, 8, 512) or (bs, 2, 2, 512)
+        upsample(256, 4, name=f'{prefix}Upsampling_2'), # (bs, 16, 16, 256) or (bs, 4, 4, 512)
+        upsample(128, 4, name=f'{prefix}Upsampling_3'), # (bs, 32, 32, 128) or (bs, 8, 8, 256)
+        upsample(64, 4, name=f'{prefix}Upsampling_4') # (bs, 64, 64, 64) or (bs, 16, 16, 128)
     ]
 
     return decoder
@@ -187,13 +187,13 @@ def generator(encoder, decoder, img_size=(128, 128)):
     return Model(inputs=inputs, outputs=x)
 
 
-def pix2pix_discriminator(name=None):
+def pix2pix_discriminator(name=None, img_size=(128, 128)):
     '''
         PatchGan discriminator model (https://arxiv.org/abs/1611.07004).
     '''
     initializer = random_normal_initializer(0., .02)
 
-    inputs = Input(shape=[None, None, 3])
+    inputs = Input(shape=[img_size[0], img_size[1], 3])
     x = inputs
 
     x = downsample(64, 4, False)(x) # (bs, 64, 64, 64)

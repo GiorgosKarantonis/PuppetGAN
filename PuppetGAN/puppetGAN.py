@@ -15,7 +15,14 @@ import models as m
 
 
 class PuppetGAN:
-    def __init__(self, img_size=(128, 128), noise_std=.2, bottleneck_noise=0., save_summary=True):
+    def __init__(self,
+                 img_size=(128, 128),
+                 noise_std=.2,
+                 bottleneck_noise=0.,
+                 real_gen_lr=2e-4,
+                 real_disc_lr=5e-5,
+                 synth_gen_lr=2e-4,
+                 synth_disc_lr=5e-5):
         # the desired size of the images
         # it doesn't have to be equal to the input size
         # every input will be resized to this value
@@ -29,34 +36,43 @@ class PuppetGAN:
         # that will be added at the bottleneck
         self.bottleneck_noise = bottleneck_noise
 
+        # make the learning rates global
+        self.real_gen_lr = real_gen_lr
+        self.real_disc_lr = real_disc_lr
+        self.synth_gen_lr = synth_gen_lr
+        self.synth_disc_lr = synth_disc_lr
+
         # the supervised objective
         self.sup_loss = tf.keras.losses.MeanAbsoluteError()
+        
         # the adversarial objective
         self.gan_loss = tf.keras.losses.MeanSquaredError()
 
         # create the shared encoder
         self.encoder = m.get_encoder(self.bottleneck_noise)
+        
         # create the decoders
         self.decoder_real = m.get_decoder(prefix='Real')
         self.decoder_synth = m.get_decoder(prefix='Synthetic')
 
-        # initialize the GANs
-        self.gen_real, self.gen_real_opt, self.gen_real_grads = None, None, None
-        self.gen_synth, self.gen_synth_opt, self.gen_synth_grads = None, None, None
+        # initialize the generators
+        self.gen_real, self.gen_real_opt, self.gen_real_grads = self.init_generator(self.encoder,
+                                                                                    self.decoder_real, 
+                                                                                    lr=self.real_gen_lr)
+        self.gen_synth, self.gen_synth_opt, self.gen_synth_grads = self.init_generator(self.encoder,
+                                                                                       self.decoder_synth,
+                                                                                       lr=self.synth_gen_lr)
 
-        self.disc_real, self.disc_real_opt, self.disc_real_grads = None, None, None
-        self.disc_synth, self.disc_synth_opt, self.disc_synth_grads = None, None, None
-
-        # setup the GANs
-        self.setup_model()
+        # initialize the discriminators
+        self.disc_real, self.disc_real_opt, self.disc_real_grads = self.init_discriminator(name='Real_Discriminator',
+                                                                                           lr=self.real_disc_lr)
+        self.disc_synth, self.disc_synth_opt, self.disc_synth_grads = self.init_discriminator(name='Synthetic_Discriminator',
+                                                                                              lr=self.synth_disc_lr)
 
         self.ckpt, self.ckpt_manager = self.define_checkpoints()
 
-        if save_summary:
-            self.log_config()
 
-
-    def log_config(self, target_path='results', file_name='config'):
+    def log_config(self, target_path='results', file_name='config', **kwargs):
         '''
             Creates and saves a report 
             of the model's architecture and its parameters.
@@ -70,17 +86,54 @@ class PuppetGAN:
             os.makedirs(target_path)
 
         with open(os.path.join(target_path, f'{file_name}.txt'), 'w') as config_f:
+            # write the name of the parent directory
+            config_f.write(f'{os.path.basename(os.getcwd())}\n\n')
+
+            # write the current date and time
             config_f.write(f'{datetime.now()}\n')
             config_f.write(f"{'-' * 65}\n\n")
 
-            hyperparams_log = 'HYPERPARAMS\n'
-            hyperparams_log = f'{hyperparams_log}Image Size: {self.img_size}\n'
-            hyperparams_log = f'{hyperparams_log}Noise std: {self.noise_std}\n'
-            hyperparams_log = f'{hyperparams_log}Bottleneck Noise: {self.bottleneck_noise}\n'
-            hyperparams_log = f"{hyperparams_log}{'-' * 65}\n"
-            hyperparams_log = f'{hyperparams_log}\n\n'
-            config_f.write(hyperparams_log)
+            # write the hyperparameters
+            config_f.write('HYPERPARAMS\n')
+            
+            config_f.write(f'Real Generator LR: {self.real_gen_lr}\n')
+            config_f.write(f'Real Discriminator LR: {self.real_disc_lr}\n')
+            config_f.write(f'Synthetic Generator LR: {self.synth_gen_lr}\n')
+            config_f.write(f'Synthetic Discriminator LR: {self.synth_disc_lr}\n')
+            
+            config_f.write(f'Image Size: {self.img_size}\n')
+            config_f.write(f'Noise std: {self.noise_std}\n')
+            config_f.write(f'Bottleneck Noise: {self.bottleneck_noise}\n')
+            
+            try:
+                config_f.write(f"On Roids: {kwargs['roids']}\n")
+            except:
+                pass
+            try:
+                config_f.write(f"Reconstruction Loss Weight: {kwargs['rec_weight']}\n")
+            except:
+                pass
+            try:
+                config_f.write(f"Disentanglement Loss Weight: {kwargs['dis_weight']}\n")
+            except:
+                pass
+            try:
+                config_f.write(f"Cycle Loss Weight: {kwargs['cycle_weight']}\n")
+            except:
+                pass
+            try:
+                config_f.write(f"Attribute Cycle b3 Loss Weight: {kwargs['attr_cycle_b3_weight']}\n")
+            except:
+                pass
+            try:
+                config_f.write(f"Attribute Cycle a Loss Weight: {kwargs['attr_cycle_a_weight']}\n")
+            except:
+                pass
 
+            config_f.write(f"{'-' * 65}\n")
+            config_f.write(f'\n\n')
+
+            # write the PuppetGAN architecture
             with redirect_stdout(config_f):
                 for d in self.encoder[0]:
                     d.summary()
@@ -103,24 +156,7 @@ class PuppetGAN:
                 config_f.write('\n\n')
 
 
-    def setup_model(self):
-        '''
-            Creates the generators and the discriminators.
-        '''
-        if not self.gen_real:
-            self.gen_real, self.gen_real_opt, self.gen_real_grads = self.init_generator(self.encoder, self.decoder_real, self.img_size)
-
-        if not self.gen_synth:
-            self.gen_synth, self.gen_synth_opt, self.gen_synth_grads = self.init_generator(self.encoder, self.decoder_synth, self.img_size)
-
-        if not self.disc_real:
-            self.disc_real, self.disc_real_opt, self.disc_real_grads = self.init_discriminator(name='Real_Discriminator')
-
-        if not self.disc_synth:
-            self.disc_synth, self.disc_synth_opt, self.disc_synth_grads = self.init_discriminator(name='Synthetic_Discriminator')
-
-
-    def define_checkpoints(self, path='./checkpoints/train'):
+    def define_checkpoints(self, path='./checkpoints/puppetGAN'):
         '''
             The structure of the checkpoints.
         '''
@@ -138,7 +174,7 @@ class PuppetGAN:
         return ckpt, ckpt_manager
 
 
-    def restore_checkpoint(self, path='./checkpoints/train', ckpt=-1):
+    def restore_checkpoint(self, path='./checkpoints/puppetGAN', ckpt=-1):
         if ckpt == -1:
             if self.ckpt_manager.latest_checkpoint:
                 self.ckpt.restore(self.ckpt_manager.latest_checkpoint)
@@ -148,11 +184,11 @@ class PuppetGAN:
             print(f'Restored checkpoint {ckpt}!')
 
 
-    def init_generator(self, encoder, decoder, img_size, lr=2e-4, beta_1=.5):
+    def init_generator(self, encoder, decoder, lr=2e-4, beta_1=.5):
         '''
             Creates a generator.
         '''
-        generator = m.generator(encoder, decoder, img_size)
+        generator = m.generator(encoder, decoder, img_size=self.img_size)
         optimizer = tf.keras.optimizers.Adam(lr, beta_1=beta_1)
         gradients = None
 
@@ -163,7 +199,7 @@ class PuppetGAN:
         '''
             Creates a discriminator.
         '''
-        discriminator = m.pix2pix_discriminator(name=name)
+        discriminator = m.pix2pix_discriminator(name=name, img_size=self.img_size)
         optimizer = tf.keras.optimizers.Adam(lr, beta_1=beta_1)
         gradients = None
 
@@ -213,20 +249,35 @@ class PuppetGAN:
 
 
     @tf.function # enable eager execution for faster run times
-    def train_step(self, a, b1, b2, b3, use_roids):
+    def train_step(self,
+                   a,
+                   b1,
+                   b2,
+                   b3,
+                   use_roids=False,
+                   rec_weight=10,
+                   dis_weight=10,
+                   cycle_weight=10,
+                   attr_cycle_b3_weight=5,
+                   attr_cycle_a_weight=3):
         '''
             Performs one training step.
 
             args:
-                a         : the images from the real domain
-                b1        : the images from the synthetic domain
-                            where only the AoI is present
-                b2        : the images from the synthetic domain
-                            where all the attributes, except the AoI, are present
-                b3        : the images from the synthetic domain
-                            where all the attributes are present
-                use_roids : a boolean variable indicating whether or not
-                            to use additional conditions
+                a                    : the images from the real domain
+                b1                   : the images from the synthetic domain
+                                       where only the AoI is present
+                b2                   : the images from the synthetic domain
+                                       where all the attributes, except the AoI, are present
+                b3                   : the images from the synthetic domain
+                                       where all the attributes are present
+                use_roids            : a boolean variable indicating whether or not
+                                       to use the improved PuppetGAN
+                rec_weight           : the weight of the reconstruction loss
+                dis_weight           : the weight of the disentanglement loss
+                cycle_weight         : the weight of the cycle loss
+                attr_cycle_b3_weight : the weight of the attribute cycle loss for b3
+                attr_cycle_a_weight  : the weight of the attribute cycle loss for a
 
             returns:
                 a dictionary containing all the losses.
@@ -235,11 +286,11 @@ class PuppetGAN:
         losses, generated_images = {}, {}
         with tf.GradientTape(persistent=True) as tape:
             # define the weights for each loss
-            reconstruction_weight = 10
-            dissentaglement_weight = 10
-            cycle_weight = 10
-            attr_cycle_weight_b_star = 5
-            attr_cycle_weight_a_star = 3
+            reconstruction_weight = rec_weight
+            dissentaglement_weight = dis_weight
+            cycle_weight = cycle_weight
+            attr_cycle_weight_b_star = attr_cycle_b3_weight
+            attr_cycle_weight_a_star = attr_cycle_a_weight
 
             # initialize the losses
             reconstruction_loss = 0
@@ -459,20 +510,39 @@ class PuppetGAN:
             epochs=500,
             save_model_every=5,
             save_images_every=1, 
-            use_roids=False):
+            use_roids=False,
+            rec_weight=10,
+            dis_weight=10,
+            cycle_weight=10,
+            attr_cycle_b3_weight=5,
+            attr_cycle_a_weight=3,
+            save_summary=True):
         '''
             The training function.
 
             args:
-                path_real         : the path containing the images from the real domain are stored
-                path_synth        : the path where the images from the real domain are stored
-                img_size          : the size of the images. It's used to deal with different datasets
-                batch_size        : the size of the mini-batch
-                epochs            : the number of epochs
-                save_model_every  : every how many epochs to create a new checkpoint
-                save_images_every : every how many epochs to save the outputs of the model
-                use_roids         : whether or not to use extra conditions, other than the ones of the paper
+                path_real            : the path containing the images from the real domain are stored
+                path_synth           : the path where the images from the real domain are stored
+                img_size             : the size of the images. It's used to deal with different datasets
+                batch_size           : the size of the mini-batch
+                epochs               : the number of epochs
+                save_model_every     : every how many epochs to create a new checkpoint
+                save_images_every    : every how many epochs to save the outputs of the model
+                use_roids            : whether or not to use extra conditions, other than the ones of the paper
+                rec_weight           : the weight of the reconstruction loss
+                dis_weight           : the weight of the disentanglement loss
+                cycle_weight         : the weight of the cycle loss
+                attr_cycle_b3_weight : the weight of the attribute cycle loss for b3
+                attr_cycle_a_weight  : the weight of the attribute cycle loss for a
         '''
+        if save_summary:
+            self.log_config(roids=use_roids,
+                            rec_weight=rec_weight,
+                            dis_weight=dis_weight,
+                            cycle_weight=cycle_weight,
+                            attr_cycle_b3_weight=attr_cycle_b3_weight,
+                            attr_cycle_a_weight=attr_cycle_a_weight)
+        exit()
 
         losses = np.empty((0, 8), float)
 
@@ -501,7 +571,16 @@ class PuppetGAN:
                 # split b to b1, b2 and b3
                 b1, b2, b3 = utils.split_to_attributes(b)
 
-                batch_losses, generated_images = self.train_step(a, b1, b2, b3, use_roids)
+                batch_losses, generated_images = self.train_step(a=a,
+                                                                 b1=b1,
+                                                                 b2=b2,
+                                                                 b3=b3,
+                                                                 use_roids=use_roids,
+                                                                 rec_weight=rec_weight,
+                                                                 dis_weight=dis_weight,
+                                                                 cycle_weight=cycle_weight,
+                                                                 attr_cycle_b3_weight=attr_cycle_b3_weight,
+                                                                 attr_cycle_a_weight=attr_cycle_a_weight)
                 batch_losses = [
                     batch_losses['reconstruction'],
                     batch_losses['disentanglement'],
@@ -580,6 +659,8 @@ class PuppetGAN:
             if sample is not None and i > sample:
                 return
 
+            print(f'\t\tCreating evaluation for image: {i}\r', end='')
+
             result = np.concatenate([a for a in alphas], axis=1)
             result = np.concatenate((np.zeros(self.img_size + (3,)), result), axis=1)
 
@@ -610,5 +691,3 @@ class PuppetGAN:
                               target_path=os.path.join(target_path, 'gifs'),
                               gif_name=i,
                               start_row=start_row)
-
-            print(f'\t\tSaved evaluation result: {i}\r', end='')

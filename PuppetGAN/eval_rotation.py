@@ -202,6 +202,10 @@ def main(path):
     model = train_lenet()
     acc, rot = get_scores(path, model)
 
+    with open('evaluation_scores.txt', 'w') as f:
+        f.write(f'Acc : {acc}\n')
+        f.write(f'Rot : {rot}\n')
+
     print(f'\n\nAccuracy: {acc}')
     print(f'Rotation: {rot}\n')
     print(f'Time elapsed: {time.time() - start}sec.\n')

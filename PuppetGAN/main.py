@@ -14,7 +14,7 @@ import puppetGAN as puppet
               '-c',
               default=-1,
               type=int,
-              help='Which checkpoint to restore. Leave to -1 for the latest.')
+              help='Which checkpoint to restore. Leave to -1 for the latest one.')
 def main(test, ckpt):
     dataset_mapping = {
         'mnist' : 'digits',
@@ -23,8 +23,6 @@ def main(test, ckpt):
         'light' : 'faces'
     }
 
-    if ckpt != -1:
-        ckpt = f'ckpt-{ckpt}'
 
     # load the configuration file
     with open('config.json') as config:
@@ -37,23 +35,47 @@ def main(test, ckpt):
     BOTTLENECK_NOISE = hyperparams['bottleneck noise']
     ROIDS = hyperparams['on roids']
 
+    # get the learning rates for the
+    # different components of PuppetGAN
+    REAL_GEN_LR = hyperparams['learning rates']['real generator']
+    REAL_DISC_LR = hyperparams['learning rates']['real discriminator']
+    SYNTH_GEN_LR = hyperparams['learning rates']['synthetic generator']
+    SYNTH_DISC_LR = hyperparams['learning rates']['synthetic discriminator']
+
     # dataset-specific hyperparameters
     BATCH_SIZE = hyperparams[dataset_mapping[DATASET]]['batch size']
     IMG_SIZE = tuple(hyperparams[dataset_mapping[DATASET]]['image size'])
     SAVE_IMG_EVERY = hyperparams[dataset_mapping[DATASET]]['save images every']
     SAVE_MODEL_EVERY = hyperparams[dataset_mapping[DATASET]]['save model every']
 
+    # get the weights for the different losses
+    # they are used only during training
+    RECONSTRUCTION_WEIGHT = hyperparams['losses weights']['reconstruction']
+    DISENTANGLEMENT_WEIGHT = hyperparams['losses weights']['disentanglement']
+    CYCLE_WEIGHT = hyperparams['losses weights']['cycle']
+    ATTR_CYCLE_B3_WEIGHT = hyperparams['losses weights']['attribute cycle b3']
+    ATTR_CYCLE_A_WEIGHT = hyperparams['losses weights']['attribute cycle a']
+
+
     # define the required directories
     real_path = f'../data/{DATASET}/real_'
     synth_path = f'../data/{DATASET}/synth_'
     eval_path = f'../data/{DATASET}/rows_'
 
+
     # load the model
     puppet_GAN = puppet.PuppetGAN(img_size=IMG_SIZE,
                                   noise_std=NOISE_STD,
-                                  bottleneck_noise=BOTTLENECK_NOISE)
+                                  bottleneck_noise=BOTTLENECK_NOISE,
+                                  real_gen_lr=REAL_GEN_LR,
+                                  real_disc_lr=REAL_DISC_LR,
+                                  synth_gen_lr=SYNTH_GEN_LR,
+                                  synth_disc_lr=SYNTH_DISC_LR)
     
+    if ckpt != -1:
+        ckpt = f'ckpt-{ckpt}'
     puppet_GAN.restore_checkpoint(ckpt=ckpt)
+
 
     if test:
         puppet_GAN.eval(f'../data/{DATASET}/rows_',sample=None)
@@ -65,7 +87,12 @@ def main(test, ckpt):
                        batch_size=BATCH_SIZE,
                        save_images_every=SAVE_IMG_EVERY,
                        save_model_every=SAVE_MODEL_EVERY,
-                       use_roids=ROIDS)
+                       use_roids=ROIDS,
+                       rec_weight=RECONSTRUCTION_WEIGHT,
+                       dis_weight=DISENTANGLEMENT_WEIGHT,
+                       cycle_weight=CYCLE_WEIGHT,
+                       attr_cycle_b3_weight=ATTR_CYCLE_B3_WEIGHT,
+                       attr_cycle_a_weight=ATTR_CYCLE_A_WEIGHT)
 
 
 

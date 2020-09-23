@@ -11,7 +11,7 @@ import tensorflow as tf
 
 def normalize(img):
     '''
-        Normalizes, in [-1, 1], images of shape [batch_size, height, width, filters].
+        Normalizes in [-1, 1], images of shape [batch_size, height, width, filters].
 
         args:
             img : the images to normalize
@@ -27,7 +27,7 @@ def normalize(img):
 
 def denormalize(img):
     '''
-        Projects, images of shape [batch_size, height, width, filters], to [0, 1].
+        Projects to [0, 1], images of shape [batch_size, height, width, filters].
 
         args:
             img : the images to de-normalize
