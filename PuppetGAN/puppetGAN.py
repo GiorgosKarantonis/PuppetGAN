@@ -534,6 +534,8 @@ class PuppetGAN:
                 cycle_weight         : the weight of the cycle loss
                 attr_cycle_b3_weight : the weight of the attribute cycle loss for b3
                 attr_cycle_a_weight  : the weight of the attribute cycle loss for a
+                save_summary         : whether or not to create a summary report for
+                                       the architecture and the hyperparameters
         '''
         if save_summary:
             self.log_config(roids=use_roids,
@@ -542,7 +544,6 @@ class PuppetGAN:
                             cycle_weight=cycle_weight,
                             attr_cycle_b3_weight=attr_cycle_b3_weight,
                             attr_cycle_a_weight=attr_cycle_a_weight)
-        exit()
 
         losses = np.empty((0, 8), float)
 
