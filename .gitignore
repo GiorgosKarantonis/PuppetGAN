@@ -1,10 +1,8 @@
-*.png
-*.pdf
-*.zip
-results/
-checksum.txt
 .DS_Store
 __pycache__
-_archive
+data/light/
+data/mouth/
+results/
+*.pdf
 qrsh.sh
 load_modules.sh
