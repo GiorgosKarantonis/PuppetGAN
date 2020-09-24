@@ -20,6 +20,10 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+'''
+    The entrypoint to PuppetGAN.
+'''
+
 import json
 import click
 import puppetGAN as puppet

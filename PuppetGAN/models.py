@@ -23,7 +23,11 @@
 # Parts of this scipt are adapted from:
 # github.com/tensorflow/examples/blob/master/tensorflow_examples/models/pix2pix/pix2pix.py
 # These parts are subject to:
-# Copyright 2019 The TensorFlow Authors. Licensed under the Apache License, Version 2.0 (the "License");
+# Copyright 2019 The TensorFlow Authors. Licensed under the Apache License, Version 2.0 (the "License").
+
+'''
+    A collection of all the sub-models used in the PuppetGAN architecture.
+'''
 
 import numpy as np
 

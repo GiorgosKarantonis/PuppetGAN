@@ -1,8 +1,31 @@
-'''
-    Part of the scipt is adapted from:
-    https://www.tensorflow.org/datasets/keras_example
-'''
+# Copyright (c) 2020 Georgios (Giorgos) Karantonis
 
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+# Parts of this scipt are adapted from:
+# https://www.tensorflow.org/datasets/keras_example
+# These parts are subject to:
+# Copyright 2020 The TensorFlow Datasets Authors, Licensed under the Apache License, Version 2.0
+
+'''
+    Evaluates the performance on the digit rotation task.
+'''
 import os
 import time
 import click
@@ -218,20 +241,27 @@ def get_v_rest(path, img_size=32):
 @click.option('--path',
               '-p',
               help='The path to the folder that contains the evaluation images.')
-def main(path):
+@click.option('--target-path',
+              '-t',
+              default=None,
+              help='Where to save the evaluation report.')
+def main(path, target_path):
     start = time.time()
+
+    if not target_path:
+        target_path = path
 
     model = train_lenet()
     acc, rot = get_scores(path, model)
     v_rest_std, v_rest_var = get_v_rest(path)
 
-    with open('evaluation_scores.txt', 'w') as f:
+    with open(os.path.join(target_path, 'evaluation_scores.txt'), 'w') as f:
         f.write(f'Acc : {acc}\n')
         f.write(f'Rot : {rot}\n')
         f.write(f'V_rest (std) : {v_rest_std}\n')
         f.write(f'V_rest (var) : {v_rest_var}\n')
 
-    print('\nResults\n')
+    print('\nResults')
     print(f'Accuracy: {acc}')
     print(f'Rotation: {rot}')
     print(f'V_rest (std): {v_rest_std}')
