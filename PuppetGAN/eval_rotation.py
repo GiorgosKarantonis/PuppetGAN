@@ -1,30 +1,7 @@
-# MIT License
-
-# Copyright (c) 2020 Georgios (Giorgos) Karantonis
-
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
-# Parts of this scipt are adapted from:
-# https://www.tensorflow.org/datasets/keras_example
-# These parts are subject to:
-# Copyright 2020 The TensorFlow Datasets Authors, Licensed under the Apache License, Version 2.0
-
+'''
+    Part of the scipt is adapted from:
+    https://www.tensorflow.org/datasets/keras_example
+'''
 
 import os
 import time
@@ -35,6 +12,8 @@ from scipy.stats import linregress
 
 import cv2
 from PIL import Image
+
+import matplotlib.pyplot as plt
 
 import tensorflow as tf
 import tensorflow_datasets as tfds
@@ -215,6 +194,26 @@ def get_scores(path, model, img_size=32):
     return accuracy, rotation_score
 
 
+def get_v_rest(path, img_size=32):
+    print('\nCalculating V_rest...')
+
+    images = []
+    for file in os.listdir(path):
+        if file.endswith('.png'):
+            img = Image.open(os.path.join(path, file)).convert('L')
+            img = np.array(img)/255
+
+            cur_img = img[3*img_size:-2*img_size, img_size:]
+            images.append(cur_img)
+    
+    images = np.array(images)
+    
+    std = images.std(0).mean()
+    var = images.var(0).mean()
+
+    return std, var
+
+
 @click.command()
 @click.option('--path',
               '-p',
@@ -224,13 +223,18 @@ def main(path):
 
     model = train_lenet()
     acc, rot = get_scores(path, model)
+    v_rest_std, v_rest_var = get_v_rest(path)
 
     with open('evaluation_scores.txt', 'w') as f:
         f.write(f'Acc : {acc}\n')
         f.write(f'Rot : {rot}\n')
+        f.write(f'V_rest (std) : {v_rest_std}\n')
+        f.write(f'V_rest (var) : {v_rest_var}\n')
 
     print(f'\n\nAccuracy: {acc}')
     print(f'Rotation: {rot}\n')
+    print(f'V_rest (std): {v_rest_std}\n')
+    print(f'V_rest (var): {v_rest_var}\n')
     print(f'Time elapsed: {time.time() - start}sec.\n')
 
 
