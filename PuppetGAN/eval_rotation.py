@@ -231,11 +231,12 @@ def main(path):
         f.write(f'V_rest (std) : {v_rest_std}\n')
         f.write(f'V_rest (var) : {v_rest_var}\n')
 
-    print(f'\n\nAccuracy: {acc}')
-    print(f'Rotation: {rot}\n')
-    print(f'V_rest (std): {v_rest_std}\n')
-    print(f'V_rest (var): {v_rest_var}\n')
-    print(f'Time elapsed: {time.time() - start}sec.\n')
+    print('\nResults\n')
+    print(f'Accuracy: {acc}')
+    print(f'Rotation: {rot}')
+    print(f'V_rest (std): {v_rest_std}')
+    print(f'V_rest (var): {v_rest_var}')
+    print(f'\nTime elapsed: {time.time() - start}sec.\n')
 
 
 if __name__ == '__main__':
