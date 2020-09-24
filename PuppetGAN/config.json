@@ -1,14 +1,14 @@
 {
 	"comments" : "Keep here any info you may want about the current configuration :)",
 
-	"dataset" : "mouth",
+	"dataset" : "mnist",
 	"dataset info" : "choose between 'mnist', 'usps', 'mouth' and 'light'",
 
-	"epochs" : 500,
+	"epochs" : 350,
 	"noise std" : 0.2,
 	"bottleneck noise" : 0,
 	
-	"on roids" : false,
+	"on roids" : true,
 
 	"learning rates" : {
 		"real generator" : 2e-4,

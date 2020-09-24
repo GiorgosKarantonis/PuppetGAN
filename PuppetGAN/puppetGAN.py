@@ -87,10 +87,6 @@ class PuppetGAN:
                                                                                        name='Synthetic_Generator',
                                                                                        lr=self.synth_gen_lr)
 
-        self.gen_real.summary()
-        self.gen_synth.summary()
-        exit()
-
         # initialize the discriminators
         self.disc_real, self.disc_real_opt, self.disc_real_grads = self.init_discriminator(name='Real_Discriminator',
                                                                                            lr=self.real_disc_lr)
@@ -133,6 +129,10 @@ class PuppetGAN:
             config_f.write(f'Noise std: {self.noise_std}\n')
             config_f.write(f'Bottleneck Noise: {self.bottleneck_noise}\n')
             
+            try:
+                config_f.write(f"Batch Size: {kwargs['batch_size']}\n")
+            except:
+                pass
             try:
                 config_f.write(f"On Roids: {kwargs['roids']}\n")
             except:
@@ -457,6 +457,11 @@ class PuppetGAN:
 
             # some extra constraints on the Attribute CycleGAN
             if use_roids:
+                a3_dis_cycled_tilde = self.gen_real(tf.concat([b2, b1], axis=1), training=True)
+                disentanglement_loss += dissentaglement_weight * self.supervised_loss(a3_cycled_tilde, a3_dis_cycled_tilde)
+                gen_real_loss += self.generator_loss(self.disc_real(a3_dis_cycled_tilde))
+                disc_real_loss += self.discriminator_loss(self.disc_real(a3_cycled_tilde), self.disc_real(a3_dis_cycled_tilde))
+                
                 # add new a loss
                 a_tilde_star = self.gen_real(tf.concat([a_tilde_noisy, a], axis=1), training=True)
                 
@@ -541,8 +546,8 @@ class PuppetGAN:
             path_eval=None,
             batch_size=30,
             epochs=500,
-            save_model_every=5,
-            save_images_every=1, 
+            save_model_every=10,
+            save_images_every=10, 
             use_roids=False,
             rec_weight=10,
             dis_weight=10,
@@ -571,7 +576,8 @@ class PuppetGAN:
                                        the architecture and the hyperparameters
         '''
         if save_summary:
-            self.log_config(roids=use_roids,
+            self.log_config(batch_size=batch_size,
+                            roids=use_roids,
                             rec_weight=rec_weight,
                             dis_weight=dis_weight,
                             cycle_weight=cycle_weight,

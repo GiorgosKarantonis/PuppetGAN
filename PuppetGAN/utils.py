@@ -22,7 +22,6 @@
 
 import os
 
-import cv2
 import imageio
 import PIL.Image
 from matplotlib import pyplot as plt
@@ -380,9 +379,6 @@ def crop_from_paper(path, target_path='.'):
             columns_to_drop = [i for i in range(img.shape[1]) if img[:, i, :].mean() == white]
             img = np.delete(img, columns_to_drop, axis=1)
 
-            plt.imshow(img)
-            plt.show()
-
             pairs = []
             start, end = None, None
             prev, cur = None, None
@@ -404,11 +400,9 @@ def crop_from_paper(path, target_path='.'):
                     if len(sub_images) >= 1:
                         assert cur_img.shape == sub_images[-1].shape
 
-                    cur_img = img[start:end, :].squeeze()
+                    cur_img = img[start:end, :, :].squeeze()
                     sub_images.append(cur_img)
-                    
-                    plt.imsave(os.path.join(target_path, f'{i}.png'), sub_images[-1])
                 except:
-                    pass
+                    continue
 
     return sub_images

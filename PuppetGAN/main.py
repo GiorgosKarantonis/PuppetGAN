@@ -94,6 +94,8 @@ def main(test, ckpt):
                                   synth_gen_lr=SYNTH_GEN_LR,
                                   synth_disc_lr=SYNTH_DISC_LR)
     
+    if ckpt != -1:
+        ckpt = f'ckpt-{ckpt}'
     puppet_GAN.restore_checkpoint(ckpt=ckpt)
 
 
