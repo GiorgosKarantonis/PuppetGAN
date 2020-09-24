@@ -350,6 +350,21 @@ def save(a, b1, b2, b3, gen_imgs, batch, epoch, base_path='./results/train/', re
 
 
 def crop_from_paper(path, target_path='.'):
+    '''
+        Gets as input a screenshot from the original paper
+        and removes any unncecessary space around the image.
+        Additionally, if it detects multiple sub-images in the screenshot
+        it splits them and saves them seperately.
+
+        args:
+            path        : the path to the folder
+                          that contains the screenshot
+            target_path : the path where all the detected images
+                          will be saved at
+
+        returns:
+            sub_images : all the detected images
+    '''
     sub_images = []
     for file in os.listdir(path):
         if file.endswith('.png'):

@@ -166,7 +166,7 @@ def get_decoder(prefix=None):
     return decoder
 
 
-def generator(encoder, decoder, img_size=(128, 128)):
+def generator(encoder, decoder, name=None, img_size=(128, 128)):
     '''
         The generator architecture.
 
@@ -206,7 +206,7 @@ def generator(encoder, decoder, img_size=(128, 128)):
                         kernel_initializer=random_normal_initializer(0., .02),
                         activation='tanh')(x) # (bs, img_size[0], img_size[1], 3)
 
-    return Model(inputs=inputs, outputs=x)
+    return Model(inputs=inputs, outputs=x, name=name)
 
 
 def pix2pix_discriminator(name=None, img_size=(128, 128)):
@@ -218,24 +218,24 @@ def pix2pix_discriminator(name=None, img_size=(128, 128)):
     inputs = Input(shape=[img_size[0], img_size[1], 3])
     x = inputs
 
-    x = downsample(64, 4, False)(x) # (bs, 64, 64, 64)
-    x = downsample(128, 4)(x) # (bs, 32, 32, 128)
-    x = downsample(256, 4)(x) # (bs, 16, 16, 256)
+    x = downsample(64, 4, False)(x) # (bs, 64, 64, 64) or (bs, 16, 16, 64)
+    x = downsample(128, 4)(x) # (bs, 32, 32, 128) or (bs, 8, 8, 128)
+    x = downsample(256, 4)(x) # (bs, 16, 16, 256) or (bs, 4, 4, 256)
 
-    x = ZeroPadding2D()(x) # (bs, 18, 18, 256)
+    x = ZeroPadding2D()(x) # (bs, 18, 18, 256) or (bs, 6, 6, 256)
     x = Conv2D(512,
                4,
                strides=1,
                kernel_initializer=initializer,
-               use_bias=False)(x) # (bs, 15, 15, 512)
+               use_bias=False)(x) # (bs, 15, 15, 512) or (bs, 3, 3, 512)
 
     x = BatchNormalization()(x)
     x = LeakyReLU()(x)
 
-    x = ZeroPadding2D()(x) # (bs, 17, 17, 512)
+    x = ZeroPadding2D()(x) # (bs, 17, 17, 512) or (bs, 5, 5, 512)
     x = Conv2D(1,
                4,
                strides=1,
-               kernel_initializer=initializer)(x) # (bs, 14, 14, 1)
+               kernel_initializer=initializer)(x) # (bs, 14, 14, 1) or (bs, 2, 2, 1)
 
     return Model(inputs=inputs, outputs=x, name=name)

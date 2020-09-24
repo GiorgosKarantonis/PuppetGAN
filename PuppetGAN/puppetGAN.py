@@ -79,11 +79,17 @@ class PuppetGAN:
 
         # initialize the generators
         self.gen_real, self.gen_real_opt, self.gen_real_grads = self.init_generator(self.encoder,
-                                                                                    self.decoder_real, 
+                                                                                    self.decoder_real,
+                                                                                    name='Real_Generator',
                                                                                     lr=self.real_gen_lr)
         self.gen_synth, self.gen_synth_opt, self.gen_synth_grads = self.init_generator(self.encoder,
                                                                                        self.decoder_synth,
+                                                                                       name='Synthetic_Generator',
                                                                                        lr=self.synth_gen_lr)
+
+        self.gen_real.summary()
+        self.gen_synth.summary()
+        exit()
 
         # initialize the discriminators
         self.disc_real, self.disc_real_opt, self.disc_real_grads = self.init_discriminator(name='Real_Discriminator',
@@ -172,6 +178,11 @@ class PuppetGAN:
                     u.summary()
                     config_f.write('\n\n')
                 
+                self.gen_real.summary()
+                config_f.write('\n\n')
+                self.gen_synth.summary()
+                config_f.write('\n\n')
+
                 self.disc_real.summary()
                 config_f.write('\n\n')
                 self.disc_synth.summary()
@@ -206,11 +217,11 @@ class PuppetGAN:
             print(f'Restored checkpoint {ckpt}!')
 
 
-    def init_generator(self, encoder, decoder, lr=2e-4, beta_1=.5):
+    def init_generator(self, encoder, decoder, name=None, lr=2e-4, beta_1=.5):
         '''
             Creates a generator.
         '''
-        generator = m.generator(encoder, decoder, img_size=self.img_size)
+        generator = m.generator(encoder, decoder, img_size=self.img_size, name=name)
         optimizer = tf.keras.optimizers.Adam(lr, beta_1=beta_1)
         gradients = None
 
