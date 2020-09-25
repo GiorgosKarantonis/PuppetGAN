@@ -108,7 +108,7 @@ def get_batch_flow(path, target_size, batch_size):
                                          class_mode=None)
 
 
-def load_test_data(path):
+def load_test_data(path, img_size=(128,128)):
     '''
         Locates and loads the rows used for evaluation.
 
@@ -125,6 +125,7 @@ def load_test_data(path):
             img = PIL.Image.open(os.path.join(path, file)).convert('RGB')
             img = np.array(img)
             img = tf.convert_to_tensor(img)
+            img = tf.image.resize(img, img_size)
             img = normalize(img)
 
             data.append(img)

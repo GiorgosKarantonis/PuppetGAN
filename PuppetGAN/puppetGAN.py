@@ -461,11 +461,14 @@ class PuppetGAN:
 
             # some extra constraints on the Attribute CycleGAN
             if use_roids:
-                a3_dis_cycled_tilde = self.gen_real(tf.concat([b2, b1], axis=1), training=True)
-                disentanglement_loss += dissentaglement_weight * self.supervised_loss(a3_cycled_tilde, a3_dis_cycled_tilde)
-                gen_real_loss += self.generator_loss(self.disc_real(a3_dis_cycled_tilde))
-                disc_real_loss += self.discriminator_loss(self.disc_real(a3_cycled_tilde), self.disc_real(a3_dis_cycled_tilde))
+                # # disentanglement roid
+                # a3_dis_cycled_tilde = self.gen_real(tf.concat([b2, b1], axis=1), training=True)
                 
+                # disentanglement_loss += dissentaglement_weight * self.supervised_loss(a3_cycled_tilde, a3_dis_cycled_tilde)
+                # gen_real_loss += self.generator_loss(self.disc_real(a3_dis_cycled_tilde))
+                # disc_real_loss += self.discriminator_loss(self.disc_real(a3_cycled_tilde), self.disc_real(a3_dis_cycled_tilde))
+                
+                # attribute cycle roid
                 # add new a loss
                 a_tilde_star = self.gen_real(tf.concat([a_tilde_noisy, a], axis=1), training=True)
                 
@@ -694,8 +697,8 @@ class PuppetGAN:
         betas_path = os.path.join(base_path, 'synth')
 
         # load the rows
-        alphas = utils.load_test_data(alphas_path)
-        betas = utils.load_test_data(betas_path)
+        alphas = utils.load_test_data(alphas_path, self.img_size)
+        betas = utils.load_test_data(betas_path, self.img_size)
 
         i = 0
         for b1_file in betas:

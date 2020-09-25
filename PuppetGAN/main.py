@@ -88,7 +88,6 @@ def main(test, ckpt):
     synth_path = f'../data/{DATASET}/synth_'
     eval_path = f'../data/{DATASET}/rows_'
 
-
     # load the model
     puppet_GAN = puppet.PuppetGAN(img_size=IMG_SIZE,
                                   noise_std=NOISE_STD,
@@ -100,12 +99,17 @@ def main(test, ckpt):
     
     if ckpt != -1:
         ckpt = f'ckpt-{ckpt}'
-    puppet_GAN.restore_checkpoint(ckpt=ckpt)
-
 
     if test:
-        puppet_GAN.eval(f'../data/{DATASET}/rows_',sample=None)
+        # restore only the weights
+        # that are needed for evaluation
+        puppet_GAN.restore_checkpoint(ckpt=ckpt).expect_partial()
+        # evaluate PuppetGAN
+        puppet_GAN.eval(f'../data/{DATASET}/rows_',sample=None, target_folder=ckpt)
     else:
+        # restore all the checkpoints
+        puppet_GAN.restore_checkpoint(ckpt=ckpt)
+        # train PuppetGAN
         puppet_GAN.fit(path_real=real_path,
                        path_synth=synth_path,
                        path_eval=eval_path,
