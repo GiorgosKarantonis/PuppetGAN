@@ -67,21 +67,15 @@ Just like in the original paper, all the reported score are for the MNIST datase
 | Roids in Disentanglement Component       |       0.91       |    0.73    |  0.01  |   250   |
 | **Roids in Both Components**             |       0.97       |  **0.79**  |  0.01  |   300   |
 
-* **Accuracy**
-
-*The closer to 1 the better.*
+* **Accuracy** *(The closer to 1 the better)*
 
 The accuracy measures, using a LeNet-5 network, how well the original class is preserved. In other words, this metric is indicative of how well the model manages to disentangle without affecting the *rest* of the attributes. As we'll see later it is possible though to get very high accuracy while having suboptimal disentanglement performance...
 
-* <img src="https://render.githubusercontent.com/render/math?math=\bf{r_{attr}}">
-
-*The closer to 1 the better.*
+* **<img src="https://render.githubusercontent.com/render/math?math=\bf{r_{attr}}">** *(The closer to 1 the better)*
 
 This score is the correlation coefficient between the *Attribute of Interest* between the known and the generated images and it captures how well the model manipulates the *Attribute of Interest*.
 
-* <img src="https://render.githubusercontent.com/render/math?math=\bf{V_{rest}}">
-
-*The closer to 0 the better.*
+* **<img src="https://render.githubusercontent.com/render/math?math=\bf{V_{rest}}">** *(The closer to 0 the better)*
 
 This score captures how similar are the results between images that have identical the *Attribute of Interest* and different the *rest* of the attributes. For this metric I report the standard deviation instead of the variance, that it is mentioned in the paper, due to the fact that the variance of my models was magnitudes smaller than the one reported on the paper. This makes me believe that the standard deviation was used in the paper as well.
 
