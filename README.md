@@ -21,7 +21,7 @@ PuppetGAN consists of 4 different components, one that is responsible for learni
   <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/PuppetGAN.png" width="60%">
 </p>
 
-With this repo I add a few more components, which I call **Roids**, which improve significantly the performance of the baseline PuppetGAN. One *Roid* is applied in the *disentanglement* part and the rest in the *attribute cycle* part while **the objective of all of the *Roids* is pretty much the same; to guarantee a better disentanglement**. 
+With this repo I add a few more components, which I call **Roids**, that improve significantly the performance of the baseline PuppetGAN. One *Roid* is applied in the *disentanglement* part and the rest in the *attribute cycle* part while **the objective of all of the *Roids* is pretty much the same; to guarantee a better disentanglement**. 
 
 * The original architecture performs the disentanglement only in the synthetic domain and this ability is passed to the real domain through implicitly. *The disentanglement *Roid* takes advantage of the CycleGAN model and performs the disentanglement in the translations of the synthetic images passing the ability explicitly to the real domain.*
 
