@@ -2,7 +2,7 @@
 
 <p align="center">
   <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mouth_baseline.gif" width="100%">
-  <em>Sooo cool, right?</em>
+  <em>Sooo cool... Right?</em>
 </p>
 
 ## Introduction
@@ -15,7 +15,27 @@ This repo contains a tensorflow implementation of [PuppetGAN](https://openaccess
 
 ### Overview
 
+PuppetGAN consists of 4 different components, one that is responsible for learning to reconstruct the input images, one that is responsible for learning to disentangle the the Attribute of Interest, a CycleGAN component and an Attribute CycleGAN, which acts in a similar manner to the CycleGAN with the exception that it deals with cross-domain inputs. The full architecture can be seen in the following image, which is copied from the original paper.
 
+<p align="center">
+  <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/PuppetGAN.png" width="60%">
+</p>
+
+With this repo I add a few more components, which I call **Roids**, which improve significantly the performance of the baseline PuppetGAN. One *Roid* is applied in the *disentanglement* part and the rest in the *attribute cycle* part while **the objective of all of the *Roids* is pretty much the same; to guarantee a better disentanglement**. 
+
+* The original architecture performs the disentanglement only in the synthetic domain and this ability is passed to the real domain through implicitly. *The disentanglement *Roid* takes advantage of the CycleGAN model and performs the disentanglement in the translations of the synthetic images passing the ability explicitly to the real domain.*
+
+* The attribute cycle *Roids* act in a similar way, but they instead force the attributes, other that the Attribute of Interest, of the cross-domain translations to be as precise as possible.
+
+<p align="center">
+  <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/roid_dis.png" width="25%">
+  <br></br>
+  <em>The Disentanglement Roid</em>
+  <br></br>
+  <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/roids_attr.png" width="60%">
+  <br></br>
+  <em>The Attribute Cycle Roids</em>
+</p>
 
 ### Implementation
 
@@ -62,14 +82,14 @@ This score captures how similar are the results between images that have identic
 
 ### Discussion about the Results
 
-The most well balanced model seems to be one that uses both kinds of *roids*, since it achieves the same accuracy and V_rest score as the original model while **increasing the manipulation score by** more than 30% compared to my baseline implementation and almost **100% compared to the original paper**. Nevertheless, although it is intuitive that a combination of all the *roids* would yield better results, I believe that more experiments are required to determine if its benefits are sufficient to outweigh the great speed up of the model that uses *roids* only in the Attribute Cycle component.
+The most well balanced model seems to be one that uses both kinds of *Roids*, since it achieves the same accuracy and V_rest score as the original model while **increasing the manipulation score by** more than 30% compared to my baseline implementation and almost **100% compared to the original paper**. Nevertheless, although it is intuitive that a combination of all the *Roids* would yield better results, I believe that more experiments are required to determine if its benefits are sufficient to outweigh the great speed up of the model that uses *Roids* only in the Attribute Cycle component.
 
 <p align="center">
   <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mnist_roids.gif" width="100%">
   <em>After adding Roids on the Attribute Cycle component</em>
 </p>
 
-For now, I would personally favor the model that uses only the *roids* of the Attribute Cycle component due to the fact that it manages to outperform every other model in the attribute manipulation score **at the 1/3 of the time**, while having seemingly insignificant differences in the values of the other metrics.
+For now, I would personally favor the model that uses only the *Roids* of the Attribute Cycle component due to the fact that it manages to outperform every other model in the attribute manipulation score **at the 1/3 of the time**, while having seemingly insignificant differences in the values of the other metrics.
 
 A significant drawback of the original model is that it looks like it memorizes images instead of editing the given ones. This can be observed in the rotation results reported in the [paper](https://openaccess.thecvf.com/content_ICCV_2019/papers/Usman_PuppetGAN_Cross-Domain_Image_Manipulation_by_Demonstration_ICCV_2019_paper.pdf) where the representation of a real digit may change during the rotation or different representations of a real digit may have the same rotated representations. This doesn't stop it though from having a very high accuracy, which shows why this metric is not necessarily ideal for calculating the quality of the disentanglement.
 
@@ -79,7 +99,7 @@ A significant drawback of the original model is that it looks like it memorizes 
   <em>The rotation results of the paper</em>
 </p>
 
-Another issue with both the model of the paper and my models can be observed in the mouth dataset, where PuppetGAN confuses the microphone with the opening of the mouth; when the synthetic image dictates a wider opening, PuppetGAN moves the microphone closer to the mouth. This effect is slightly bigger in my baseline but I believe that it is due to the fact that I haven't done any hyperparameter tuning; some experimentation with the magnitude of the noise or with the weights of the different components could eliminate it.
+Another issue with both the model of the paper and my models can be observed in the mouth dataset, where PuppetGAN confuses the microphone with the opening of the mouth; when the synthetic image dictates a wider opening, PuppetGAN moves the microphone closer to the mouth. This effect is slightly bigger in my baseline but I believe that it is due to the fact that I haven't done any hyper-parameter tuning; some experimentation with the magnitude of the noise or with the weights of the different components could eliminate it.
 
 ## Running the Code
 
@@ -128,7 +148,7 @@ Unless you want to experiment with different architectures, [`PuppetGAN/config.j
 
 * `bottleneck noise` : The standard deviation of the noise that will be applied to the bottleneck. The mean of the noise is 0.
 
-* `on roids` : Whether or not to use the proposed roids.
+* `on roids` : Whether or not to use the proposed Roids.
 
 * `learning rates`-`real generator` : The learning rate of the real generator.
 
