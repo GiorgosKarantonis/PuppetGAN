@@ -74,6 +74,7 @@ For now, I would personally favor the model that uses only the *roids* of the At
 A significant drawback of the original model is that it looks like it memorizes images instead of editing the given ones. This can be observed in the rotation results reported in the [paper](https://openaccess.thecvf.com/content_ICCV_2019/papers/Usman_PuppetGAN_Cross-Domain_Image_Manipulation_by_Demonstration_ICCV_2019_paper.pdf) where the representation of a real digit may change during the rotation or different representations of a real digit may have the same rotated representations. This doesn't stop it though from having a very high accuracy, which shows why this metric is not necessarily ideal for calculating the quality of the disentanglement.
 
 <p align="center">
+  <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mnist_paper.png" width="100%">
   <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mnist_paper.gif" width="100%">
   <em>The rotation results of the paper</em>
 </p>
