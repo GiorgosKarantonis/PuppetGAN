@@ -15,13 +15,15 @@ This repo contains a tensorflow implementation of [PuppetGAN](https://openaccess
 
 ### Overview
 
-PuppetGAN consists of 4 different components, one that is responsible for learning to reconstruct the input images, one that is responsible for learning to disentangle the the Attribute of Interest, a CycleGAN component and an Attribute CycleGAN, which acts in a similar manner to the CycleGAN with the exception that it deals with cross-domain inputs. The full architecture can be seen in the following image, which is copied from the original paper.
+PuppetGAN consists of 4 different components; one that is responsible for learning to reconstruct the input images, one that is responsible for learning to disentangle the the *Attribute of Interest*, a CycleGAN component and an Attribute CycleGAN. The Attribute CycleGAN acts in a similar manner to CycleGAN with the exception that it deals with cross-domain inputs. 
 
 <p align="center">
   <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/PuppetGAN.png" width="80%">
+  <br></br>
+  <em>The full architecture of the baseline PuppetGAN (the image is copied the original paper)</em>
 </p>
 
-**With this repo I add a few more components, which I call Roids**, that improve significantly the performance of the baseline PuppetGAN. One *Roid* is applied in the *disentanglement* part and the rest in the *attribute cycle* part while **the objective of all of the *Roids* is pretty much the same; to guarantee a better disentanglement**. 
+**With this repo I add a few more components, which I call Roids**, that greatly improve the performance of the baseline PuppetGAN. One *Roid* is applied in the *disentanglement* part and the rest in the *attribute cycle* part while **the objective of all of them is pretty much the same; to guarantee a better disentanglement!**
 
 * The original architecture performs the disentanglement only in the synthetic domain and this ability is passed to the real domain through implicitly. *The disentanglement *Roid* takes advantage of the CycleGAN model and performs the disentanglement in the translations of the synthetic images passing the ability explicitly to the real domain.*
 
