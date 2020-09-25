@@ -20,6 +20,10 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+'''
+	Adds noise to the background of the synthetic images.
+'''
+
 import os
 
 import numpy as np
