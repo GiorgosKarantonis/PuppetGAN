@@ -1,7 +1,7 @@
 # Better Cross-Domain Feature Disentanglement and Manipulation with Improved PuppetGAN
 
 <p align="center">
-  <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mouth_baseline.gif" width="100%">
+  <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mouth_roids_190_.gif" width="100%">
   <em>Quite cool... Right?</em>
 </p>
 
@@ -82,11 +82,19 @@ This score captures how similar are the results between images that have identic
 
 ### Discussion about the Results
 
+<p align="center">
+  <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mouth_baseline.gif" width="100%">
+  <em>Mouth manipulation after 440 epochs, using the Basiline.</em>
+  <br></br>
+  <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mouth_roids_190_.gif" width="100%">
+  <em>Mouth manipulation after 190 epochs with Roids in the Attribute Cycle component. The model learns to both open an close the mouth more accurately.</em>
+</p>
+
 The most well balanced model seems to be one that uses both kinds of *Roids*, since it achieves the same accuracy and V_rest score as the original model while **increasing the manipulation score by** more than 30% compared to my baseline implementation and almost **100% compared to the original paper**. Nevertheless, although it is intuitive that a combination of all the *Roids* would yield better results, I believe that more experiments are required to determine if its benefits are sufficient to outweigh the great speed up of the model that uses *Roids* only in the Attribute Cycle component.
 
 <p align="center">
   <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mnist_roids.gif" width="100%">
-  <em>After adding Roids on the Attribute Cycle component</em>
+  <em>MNIST rotation after adding Roids on the Attribute Cycle component</em>
 </p>
 
 For now, I would personally favor the model that uses only the *Roids* of the Attribute Cycle component due to the fact that it manages to outperform every other model in the attribute manipulation score **at the 1/3 of the time**, while having seemingly insignificant differences in the values of the other metrics.
