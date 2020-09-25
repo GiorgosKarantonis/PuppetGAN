@@ -2,18 +2,26 @@
 
 <p align="center">
   <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mouth_baseline.gif" width="100%">
-  <em>Cool, right?</em>
+  <em>Sooo cool, right?</em>
 </p>
 
 ## Introduction
 
 This repo contains a tensorflow implementation of [PuppetGAN](https://openaccess.thecvf.com/content_ICCV_2019/papers/Usman_PuppetGAN_Cross-Domain_Image_Manipulation_by_Demonstration_ICCV_2019_paper.pdf) as well as **an improved version of it, capable of manipulating features up to 100% better and up to 300% faster!** 😎
 
-**PuppetGAN is** model that builds on top of the CycleGAN idea and is **capable of extracting and manipulating a features from a domain using examples from a different domain**. On top of that, one amazing aspect of PuppetGAN is that it **does not require a great amount of data**; the biggest dataset I used contained 5000 sets of examples while the smallest one just **slightly over 1000 sets of examples**!
+**PuppetGAN is** model that extends the CycleGAN idea and is **capable of extracting and manipulating features from a domain using examples from a different domain**. On top of that, one amazing aspect of PuppetGAN is that it **does not require a great amount of data**; the biggest dataset I used contained 5000 sets of examples while the smallest one **just slightly over 1000 sets of examples**!
 
 ## The Model(s)
 
+### Overview
 
+
+
+### Implementation
+
+The only difference between my baseline and the model from the paper is that my generators and discriminators are a modified version of the ones used in tensorflow's [CycleGAN tutorial](https://www.tensorflow.org/tutorials/generative/cyclegan). The fact that the creators of PuppetGAN used resnet blocks may be partially responsible for the memorization effect that seems to be present in some of the results of the paper due to the fact that the skip connections allow for information to be passed unchanged between different layers.
+
+**Other than that, my implementations use exactly the same parameters as the ones in the original model. Also, neither my architectures nor the parameters have been modified at all between different datasets.**
 
 ## Performance
 
@@ -40,41 +48,47 @@ Just like in the original paper, all the reported score are for the MNIST datase
 #### Accuracy
 The accuracy measures how well the original class is preserved, using a LeNet-5 network. In other words, this metric is indicative of how well the model manages to disentangle the Attribute of Interest without affecting the rest of the attributes. As we'll see later it is possible though to get very high accuracy while having suboptimal disentanglement performance...
 
-The closer to 1 the better.
+*The closer to 1 the better.*
 
 #### r_attr
 This score is the correlation coefficient between the Attribute of Interest in the known and the generated images and it captures how well a model manipulates the attribute of interest.
 
-The closer to 1 the better.
+*The closer to 1 the better.*
 
 #### V_rest
 This score captures how similar are the results between images that have identical the Attribute of Interest and different the rest of the attributes. For this metric I report the standard deviation instead of the variance that it is mentioned in the paper, due to the fact that the variance of my models was magnitudes smaller than the one reported on the paper. This makes me believe that the standard deviation was used in the paper as well.
 
-The closer to 0 the better.
+*The closer to 0 the better.*
 
 ### Discussion about the Results
 
-The most well balanced model seems to be one that uses both kinds of *roids*, since it achieves the same accuracy and V_rest score as the original model while **increasing the manipulation score by** more than 30% compared to my baseline implementation and almost **100% compared to the original paper**. Nevertheless, although it is intuitive that a combination of both *roids* would yield better results, I believe that more experiments are required to determine if its benefits are sufficient to outweigh the great speed up of the model that uses *roids* only in the Attribute Cycle component. 
-
-For now, I would personally favor the model that uses only the *roid* in the Attribute Cycle component due to the fact that it manages to outperform every other model in the attribute manipulation score **at the 1/3 of the time**, while having seemingly insignificant differences in the values of the other metrics.
+The most well balanced model seems to be one that uses both kinds of *roids*, since it achieves the same accuracy and V_rest score as the original model while **increasing the manipulation score by** more than 30% compared to my baseline implementation and almost **100% compared to the original paper**. Nevertheless, although it is intuitive that a combination of all the *roids* would yield better results, I believe that more experiments are required to determine if its benefits are sufficient to outweigh the great speed up of the model that uses *roids* only in the Attribute Cycle component.
 
 <p align="center">
   <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mnist_roids.gif" width="100%">
   <em>After adding Roids on the Attribute Cycle component</em>
 </p>
 
+For now, I would personally favor the model that uses only the *roids* of the Attribute Cycle component due to the fact that it manages to outperform every other model in the attribute manipulation score **at the 1/3 of the time**, while having seemingly insignificant differences in the values of the other metrics.
 
 A significant drawback of the original model is that it looks like it memorizes images instead of editing the given ones. This can be observed in the rotation results reported in the [paper](https://openaccess.thecvf.com/content_ICCV_2019/papers/Usman_PuppetGAN_Cross-Domain_Image_Manipulation_by_Demonstration_ICCV_2019_paper.pdf) where the representation of a real digit may change during the rotation or different representations of a real digit may have the same rotated representations. This doesn't stop it though from having a very high accuracy, which shows why this metric is not necessarily ideal for calculating the quality of the disentanglement.
 
-## Running the Code
+<p align="center">
+  <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mnist_paper.gif" width="100%">
+  <em>The rotation results of the paper</em>
+</p>
 
-*I used `cuda 7.5.18` in all my experiments.*
+Another issue with both the model of the paper and my models can be observed in the mouth dataset, where PuppetGAN confuses the microphone with the opening of the mouth; when the synthetic image dictates a wider opening, PuppetGAN moves the microphone closer to the mouth. This effect is slightly bigger in my baseline but I believe that it is due to the fact that I haven't done any hyperparameter tuning; some experimentation with the magnitude of the noise or with the weights of the different components could eliminate it.
+
+## Running the Code
 
 You can manage all the dependencies with Pipenv using the provided [Pipfile](https://github.com/GiorgosKarantonis/PuppetGAN/blob/master/Pipfile). This allows for easier reproducibility of the code due to the fact that Pipenv creates a virtual environment containing all the necessary libraries. **Just run `pipenv shell` in the base directory of the project and you're ready to go!**
 
 On the other hand, if for any reason you don't want to use Pipenv, you can install all the required libraries using the provided `requirements.txt` file. 
 
-In order to get the datasets, you can use the `fetch_data.sh` script which downloads them and extracts them in the correct directory, running:
+*Also, in all my experiments I used `cuda 7.5.18`.*
+
+In order to download the datasets, you can use the `fetch_data.sh` script which downloads and extracts them in the correct directory, running:
 
 ```bash
 . fetch_data.sh
@@ -101,9 +115,9 @@ python3 main.py --ckpt=[checkpoint number]
 
 To help you keep better track of your work, every time you start a new training, a configuration report is created in [`./PuppetGAN/results/config.txt`](https://github.com/GiorgosKarantonis/PuppetGAN/blob/master/PuppetGAN/results/config.txt) which stores a detailed report of your current configuration. This report contains all your hyper-parameters and their respective values as well as the whole architecture of the model you are using, including every single layer, its parameters and how it is connected to the rest of the model.
 
-Also, to help you keep better track of your process, during a certain number of epochs (which is specified by you), my model creates in `./PuppetGAN/results` a sample of [evaluation rows of generated images](https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mouth_baseline.png) along with [`gif` animations for these rows](https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mouth_baseline.gif) to visualize better how well accurate is the disentanglement and the manipulation of the attribute of interest. 
+Also, to help you keep better track of your process, during a certain number of epochs my model creates in `./PuppetGAN/results` a sample of [evaluation rows of generated images](https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mouth_baseline.png) along with [`gif` animations for these rows](https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mouth_baseline.gif) to visualize better how well accurate is the disentanglement and the manipulation of the attribute of interest. 
 
-On top of all that, in `./PuppetGAN/results` are also stored plots of both the supervised and the adversarial losses as well as the images that are produced during the training. This allows you to have in a single folder everything you need to evaluate an experiment, keep track of its progress and reproduce its results!
+On top of that, in `./PuppetGAN/results` are also stored plots of both the supervised and the adversarial losses as well as the images that are produced during the training. This allows you to have in a single folder everything you need to evaluate an experiment, keep track of its progress and reproduce its results!
 
 Unless you want to experiment with different architectures, [`PuppetGAN/config.json`](https://github.com/GiorgosKarantonis/PuppetGAN/blob/master/PuppetGAN/config.json) is the only file you'll need. This file allows you to control all the hyper-parameters of the model without having to look at any of code! More specifically, the parameters you can control are: 
 
