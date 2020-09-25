@@ -95,6 +95,7 @@ A significant drawback of the original model is that it looks like it memorizes 
 
 <p align="center">
   <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mnist_paper.png" width="100%">
+  <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mnist_paper_.gif" width="100%">
   <em>The rotation results of the paper</em>
 </p>
 
