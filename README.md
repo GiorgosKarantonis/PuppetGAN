@@ -2,7 +2,6 @@
 
 <p align="center">
   <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mouth_roids_190_.gif" width="100%">
-  <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mnist_roids.gif" width="100%">
   <em>Quite cool... Right?</em>
 </p>
 
