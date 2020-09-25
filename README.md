@@ -1,10 +1,8 @@
 # Cross-Domain Feature Disentanglement and Manipulation with PuppetGAN
 
 <p align="center">
-  <a href="#">
-    <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mouth_baseline.gif" width="100%">
-    <em>Cool, right?</em>
-  </a>
+  <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mouth_baseline.gif" width="100%">
+  <em>Cool, right?</em>
 </p>
 
 ## Introduction
@@ -22,10 +20,8 @@ This repo contains a tensorflow implementation of [PuppetGAN](https://openaccess
 **Both my baseline implementation and my proposed architecture(s) significantly outperform the original PuppetGAN!**
 
 <p align="center">
-  <a href="#">
-    <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mnist_baseline.gif" width="100%">
-    <em>Rotation of MNIST digits</em>
-  </a>
+  <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mnist_baseline.gif" width="100%">
+  <em>Rotation of MNIST digits</em>
 </p>
 
 ### By the Numbers
@@ -63,10 +59,8 @@ The most well balanced model seems to be one that uses both kinds of *roids*, si
 For now, I would personally favor the model that uses only the *roid* in the Attribute Cycle component due to the fact that it manages to outperform every other model in the attribute manipulation score **at the 1/3 of the time**, while having seemingly insignificant differences in the values of the other metrics.
 
 <p align="center">
-  <a href="#">
-    <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mnist_roids.gif" width="100%">
-    <em>After adding Roids on the Attribute Cycle component</em>
-  </a>
+  <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mnist_roids.gif" width="100%">
+  <em>After adding Roids on the Attribute Cycle component</em>
 </p>
 
 
