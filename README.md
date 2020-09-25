@@ -85,9 +85,7 @@ Another issue with both the model of the paper and my models can be observed in 
 
 You can manage all the dependencies with Pipenv using the provided [Pipfile](https://github.com/GiorgosKarantonis/PuppetGAN/blob/master/Pipfile). This allows for easier reproducibility of the code due to the fact that Pipenv creates a virtual environment containing all the necessary libraries. **Just run `pipenv shell` in the base directory of the project and you're ready to go!**
 
-On the other hand, if for any reason you don't want to use Pipenv, you can install all the required libraries using the provided `requirements.txt` file. 
-
-*Also, in all my experiments I used `cuda 7.5.18`.*
+On the other hand, if for any reason you don't want to use Pipenv, you can install all the required libraries using the provided `requirements.txt` file. Neither this file nor Pipenv take care of cuda though; in all my experiments I used `cuda 7.5.18`.
 
 In order to download the datasets, you can use the `fetch_data.sh` script which downloads and extracts them in the correct directory, running:
 
