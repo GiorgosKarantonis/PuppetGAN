@@ -2,7 +2,7 @@
 __pycache__
 data/
 checkpoints/puppetGAN
-results/
+__results__
 *.pdf
 qrsh.sh
 load_modules.sh
