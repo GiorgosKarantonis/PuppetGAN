@@ -2,7 +2,7 @@
 
 <p align="center">
   <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mouth_baseline.gif" width="100%">
-  <em>Sooo cool... Right?</em>
+  <em>Quite cool... Right?</em>
 </p>
 
 ## Introduction
