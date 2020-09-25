@@ -698,7 +698,7 @@ class PuppetGAN:
 
         # load the rows
         alphas = utils.load_test_data(alphas_path, self.img_size)
-        betas = utils.load_test_data(betas_path, self.img_size)
+        betas = utils.load_test_data(betas_path)
 
         i = 0
         for b1_file in betas:

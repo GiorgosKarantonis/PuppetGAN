@@ -8,7 +8,7 @@
 	"noise std" : 0.2,
 	"bottleneck noise" : 0,
 	
-	"on roids" : false,
+	"on roids" : true,
 
 	"learning rates" : {
 		"real generator" : 2e-4,
