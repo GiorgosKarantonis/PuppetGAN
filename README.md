@@ -83,7 +83,7 @@ This score captures how similar are the results between images that have identic
 
 <p align="center">
   <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mouth_baseline.gif" width="100%">
-  <em>Mouth manipulation after 440 epochs, using the Basiline.</em>
+  <em>Mouth manipulation after 440 epochs, using the Baseline.</em>
   <br></br>
   <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mouth_roids_190_.gif" width="100%">
   <em>Mouth manipulation after 190 epochs with Roids in the Attribute Cycle component. The model learns to both open and close the mouth more accurately, disentangle in a better way, produce more clear images and all that way faster!</em>
