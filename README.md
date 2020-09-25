@@ -87,7 +87,7 @@ This score captures how similar are the results between images that have identic
   <em>Mouth manipulation after 440 epochs, using the Basiline.</em>
   <br></br>
   <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mouth_roids_190_.gif" width="100%">
-  <em>Mouth manipulation after 190 epochs with Roids in the Attribute Cycle component. The model learns to both open an close the mouth more accurately.</em>
+  <em>Mouth manipulation after 190 epochs with Roids in the Attribute Cycle component. The model learns to both open an close the mouth more accurately, way faster and while producing more clear images!</em>
 </p>
 
 The most well balanced model seems to be one that uses both kinds of *Roids*, since it achieves the same accuracy and V_rest score as the original model while **increasing the manipulation score by** more than 30% compared to my baseline implementation and almost **100% compared to the original paper**. Nevertheless, although it is intuitive that a combination of all the *Roids* would yield better results, I believe that more experiments are required to determine if its benefits are sufficient to outweigh the great speed up of the model that uses *Roids* only in the Attribute Cycle component.
