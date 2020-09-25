@@ -1,4 +1,4 @@
-# Cross-Domain Feature Disentanglement and Manipulation with PuppetGAN
+# Better Cross-Domain Feature Disentanglement and Manipulation with Improved PuppetGAN
 
 <p align="center">
   <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mouth_baseline.gif" width="100%">
