@@ -27,7 +27,7 @@ PuppetGAN consists of 4 different components; one that is responsible for learni
 
 * The original architecture performs the disentanglement only in the synthetic domain and this ability is passed to the real domain through implicitly. *The disentanglement *Roid* takes advantage of the CycleGAN model and performs the disentanglement in the translations of the synthetic images passing the ability explicitly to the real domain.*
 
-* The attribute cycle *Roids* act in a similar way, but they instead force the attributes, other that the Attribute of Interest, of the cross-domain translations to be as precise as possible.
+* The attribute cycle *Roids* act in a similar way, but they instead force the attributes, other that the *Attribute of Interest*, of the cross-domain translations to be as precise as possible.
 
 <p align="center">
   <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/roid_dis.png" width="25%">
@@ -41,9 +41,9 @@ PuppetGAN consists of 4 different components; one that is responsible for learni
 
 ### Implementation
 
-The only difference between my baseline and the model from the paper is that my generators and discriminators are a modified version of the ones used in tensorflow's [CycleGAN tutorial](https://www.tensorflow.org/tutorials/generative/cyclegan). The fact that the creators of PuppetGAN used resnet blocks may be partially responsible for the memorization effect that seems to be present in some of the results of the paper due to the fact that the skip connections allow for information to be passed unchanged between different layers.
+The only difference between my baseline and the model from the paper is that my generators and discriminators are a modified version of the ones used in tensorflow's [CycleGAN tutorial](https://www.tensorflow.org/tutorials/generative/cyclegan). The fact that the creators of PuppetGAN used ResNet blocks may be partially responsible for the memorization effect that seems to be present in some of the results of the paper due to the fact that the skip connections allow for information to be passed unchanged between different layers.
 
-**Other than that, my implementations use exactly the same parameters as the ones in the original model. Also, neither my architectures nor the parameters have been modified at all between different datasets.**
+**Other than that, all my implementations use exactly the same parameters as the ones in the original model. Also, neither my architectures nor the parameters have been modified at all between different datasets.**
 
 ## Performance
 
@@ -58,7 +58,7 @@ The only difference between my baseline and the model from the paper is that my 
 
 Just like in the original paper, all the reported score are for the MNIST dataset. Due to the fact that I didn't have access to the *size* dataset, I was able to measure the performance of my models only in the *rotation* dataset.
 
-| PuppetGAN                                | Accuracy         | r_attr     | V_rest |  Epoch  |
+|PuppetGAN|Accuracy|<img src="https://render.githubusercontent.com/render/math?math=\bf{r_{attr}}">|<img src="https://render.githubusercontent.com/render/math?math=\bf{V_{rest}}">|Epoch|
 |:----------------------------------------:|:----------------:|:----------:|:------:|:-------:|
 | *Original (paper)*                       |      *0.97*      |   *0.40*   | *0.01* |   *-*   |
 | My baseline                              |       0.96       |    0.59    |  0.01  |   300   |
@@ -67,19 +67,19 @@ Just like in the original paper, all the reported score are for the MNIST datase
 | Roids in Disentanglement Component       |       0.91       |    0.73    |  0.01  |   250   |
 | **Roids in Both Components**             |       0.97       |  **0.79**  |  0.01  |   300   |
 
-#### Accuracy
+* **Accuracy**
 
 *The closer to 1 the better.*
 
 The accuracy measures, using a LeNet-5 network, how well the original class is preserved. In other words, this metric is indicative of how well the model manages to disentangle without affecting the *rest* of the attributes. As we'll see later it is possible though to get very high accuracy while having suboptimal disentanglement performance...
 
-#### r_attr
+* <img src="https://render.githubusercontent.com/render/math?math=\bf{r_{attr}}">
 
 *The closer to 1 the better.*
 
 This score is the correlation coefficient between the *Attribute of Interest* between the known and the generated images and it captures how well the model manipulates the *Attribute of Interest*.
 
-#### V_rest
+* <img src="https://render.githubusercontent.com/render/math?math=\bf{V_{rest}}">
 
 *The closer to 0 the better.*
 
@@ -95,16 +95,18 @@ This score captures how similar are the results between images that have identic
   <em>Mouth manipulation after 190 epochs with Roids in the Attribute Cycle component. The model learns to both open and close the mouth more accurately, disentangle in a better way, produce more clear images and all that way faster!</em>
 </p>
 
-The most well balanced model seems to be one that uses both kinds of *Roids*, since it achieves the same accuracy and V_rest score as the original model while **increasing the manipulation score by** more than 30% compared to my baseline implementation and almost **100% compared to the original paper**. Nevertheless, although it is intuitive that a combination of all the *Roids* would yield better results, I believe that more experiments are required to determine if its benefits are sufficient to outweigh the great speed up of the model that uses *Roids* only in the Attribute Cycle component.
+The most well balanced model seems to be one that uses both kinds of *Roids*, since it achieves the same *accuracy* and 
+<img src="https://render.githubusercontent.com/render/math?math=\textit{V_{rest}}"> 
+score as the original model while **increasing the manipulation score by** more than 30% compared to my baseline implementation and almost **100% compared to the original paper**. Nevertheless, although it is intuitive that a combination of all the *Roids* would yield better results, I believe that more experiments are required to determine if its benefits are sufficient to outweigh the great speed up of the model that uses *Roids* only in the Attribute Cycle component.
 
 <p align="center">
   <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mnist_roids.gif" width="100%">
   <em>MNIST rotation after adding Roids on the Attribute Cycle component</em>
 </p>
 
-For now, I would personally favor the model that uses only the *Roids* of the Attribute Cycle component due to the fact that it manages to outperform every other model in the attribute manipulation score **at the 1/3 of the time**, while having insignificant differences in the values of the other metrics.
+For now, I would personally favor the model that uses only the *Roids* of the Attribute Cycle component due to the fact that it manages to outperform every other model in the *AoI* manipulation score **at the 1/3 of the time**, while having insignificant differences in the values of the other metrics.
 
-A significant drawback of the original model is that it looks like it memorizes images instead of editing the given ones. This can be observed in the rotation results reported in the [paper](https://openaccess.thecvf.com/content_ICCV_2019/papers/Usman_PuppetGAN_Cross-Domain_Image_Manipulation_by_Demonstration_ICCV_2019_paper.pdf) where the representation of a real digit may change during the rotation or different representations of a real digit may have the same rotated representations. This doesn't stop it though from having a very high accuracy, which highlights why this metric is not necessarily ideal for calculating the quality of the disentanglement.
+A significant drawback of the original model is that seems to memorizes seen images instead of editing the given ones. This can be observed in the rotation results reported in the [paper](https://openaccess.thecvf.com/content_ICCV_2019/papers/Usman_PuppetGAN_Cross-Domain_Image_Manipulation_by_Demonstration_ICCV_2019_paper.pdf) where the representation of a real digit may change during the rotation or different representations of a real digit may have the same rotated representations. This doesn't stop it though from having a very high accuracy, which highlights why this metric is not necessarily ideal for calculating the quality of the disentanglement.
 
 <p align="center">
   <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mnist_paper.png" width="100%">
