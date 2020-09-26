@@ -20,7 +20,7 @@ PuppetGAN consists of 4 different components; one that is responsible for learni
 <p align="center">
   <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/PuppetGAN.png" width="80%">
   <br></br>
-  <em>The full architecture of the baseline PuppetGAN (the image is copied the original paper)</em>
+  <em>The full architecture of the baseline PuppetGAN (the image is copied from the original paper)</em>
 </p>
 
 **With this repo I add a few more components, which I call Roids, that greatly improve the performance of the baseline PuppetGAN**. One *Roid* is applied in the *disentanglement* part and the rest in the *attribute cycle* part while **the objective of all of them is pretty much the same; to guarantee better disentanglement!**
