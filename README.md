@@ -41,7 +41,7 @@ PuppetGAN consists of 4 different components; one that is responsible for learni
 
 ### Implementation
 
-The only difference between my baseline and the model from the paper is that my generators and discriminators are a modified version of the ones used in tensorflow's [CycleGAN tutorial](https://www.tensorflow.org/tutorials/generative/cyclegan). The fact that the creators of PuppetGAN used ResNet blocks may be partially responsible for the memorization effect that seems to be present in some of the results of the paper due to the fact that the skip connections allow for information to be passed unchanged between different layers.
+The only difference between my baseline and the model from the paper is that my generators and discriminators are modified versions of the ones used in tensorflow's [CycleGAN tutorial](https://www.tensorflow.org/tutorials/generative/cyclegan). The fact that the creators of PuppetGAN used ResNet blocks may be partially responsible for the memorization effect that seems to be present in some of the results of the paper due to the fact that the skip connections allow for information to be passed unchanged between different layers.
 
 **Other than that, all my implementations use exactly the same parameters as the ones in the original model. Also, neither my architectures nor the parameters have been modified at all between different datasets.**
 
