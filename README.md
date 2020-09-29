@@ -34,8 +34,8 @@ PuppetGAN consists of 4 different components; one that is responsible for learni
   <br></br>
   <em>The Disentanglement Roid</em>
   <br></br>
-  <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/roid_attr1.png" width="20%">
-  <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/roid_attr2.png" width="20%">
+  <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/roid_attr1.png" width="30%">
+  <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/roid_attr2.png" width="30%">
   <br></br>
   <em>The Attribute Cycle Roids</em>
 </p>
