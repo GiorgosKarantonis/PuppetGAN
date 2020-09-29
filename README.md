@@ -30,12 +30,12 @@ PuppetGAN consists of 4 different components; one that is responsible for learni
 * The attribute cycle *Roids* act in a similar way, but they instead force the attributes, other that the *Attribute of Interest*, of the cross-domain translations to be as precise as possible. This can be seen as a more strict version of the disentanglement *Roid* as well.
 
 <p align="center">
-  <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/roid_dis.png" width="25%">
+  <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/roid_dis_.png" width="25%">
   <br></br>
   <em>The Disentanglement Roid</em>
   <br></br>
-  <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/roid_attr_1.png" width="20%">
-  <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/roid_attr_2.png" width="20%">
+  <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/roid_attr1.png" width="20%">
+  <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/roid_attr2.png" width="20%">
   <br></br>
   <em>The Attribute Cycle Roids</em>
 </p>
