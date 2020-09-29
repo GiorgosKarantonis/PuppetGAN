@@ -103,11 +103,11 @@ def main(test, ckpt):
     if test:
         # restore only the weights
         # that are needed for evaluation
-        puppet_GAN.restore_checkpoint(ckpt=ckpt).expect_partial()
+        puppet_GAN.restore_checkpoint(ckpt=ckpt, partial=True)
         # evaluate PuppetGAN
         puppet_GAN.eval(f'../data/{DATASET}/rows_',sample=None, target_folder=ckpt)
     else:
-        # restore all the checkpoints
+        # restore all the weights
         puppet_GAN.restore_checkpoint(ckpt=ckpt)
         # train PuppetGAN
         puppet_GAN.fit(path_real=real_path,

@@ -211,13 +211,29 @@ class PuppetGAN:
         return ckpt, ckpt_manager
 
 
-    def restore_checkpoint(self, path='./checkpoints/puppetGAN', ckpt=-1):
+    def restore_checkpoint(self, path='./checkpoints/puppetGAN', ckpt=-1, partial=False):
+        '''
+            Restores a checkpoint of the model.
+
+            args:
+                path    : the folder where the model's checkpoints are stored
+                ckpt    : which checkpoints to restore
+                          the default value , -1, restores the latest one
+                partial : whether or not to restore all the weights (False)
+                          or just the ones needed for evaluation (True)
+        '''
         if ckpt == -1:
             if self.ckpt_manager.latest_checkpoint:
-                self.ckpt.restore(self.ckpt_manager.latest_checkpoint)
+                if partial:
+                    self.ckpt.restore(self.ckpt_manager.latest_checkpoint).expect_partial()
+                else:
+                    self.ckpt.restore(self.ckpt_manager.latest_checkpoint)
                 print('Latest checkpoint restored!')
         else:
-            self.ckpt.restore(os.path.join(path, ckpt))
+            if partial:
+                self.ckpt.restore(os.path.join(path, ckpt)).expect_partial()
+            else:
+                self.ckpt.restore(os.path.join(path, ckpt))
             print(f'Restored checkpoint {ckpt}!')
 
 
