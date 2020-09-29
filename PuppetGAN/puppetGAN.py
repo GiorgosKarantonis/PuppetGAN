@@ -259,7 +259,7 @@ class PuppetGAN:
         return discriminator, optimizer, gradients
 
 
-    def generator_loss(self, generated, weight=1):
+    def generator_loss(self, generated, weight=1, real=None):
         '''
             Calculates the generator loss, defined in the __init__ function.
             By default the Mean Squared Error is used. 
@@ -484,18 +484,20 @@ class PuppetGAN:
                 # gen_real_loss += self.generator_loss(self.disc_real(a3_dis_cycled_tilde))
                 # disc_real_loss += self.discriminator_loss(self.disc_real(a3_cycled_tilde), self.disc_real(a3_dis_cycled_tilde))
                 
-                # attribute cycle roid
+                # attribute cycle roids
                 # add new a loss
                 a_tilde_star = self.gen_real(tf.concat([a_tilde_noisy, a], axis=1), training=True)
                 
                 attr_cycle_loss_a_star += self.supervised_loss(a, a_tilde_star)
                 gen_real_loss += self.generator_loss(self.disc_real(a_tilde_star))
+                disc_real_loss += self.discriminator_loss(self.disc_real(a), self.disc_real(a_tilde_star))
 
                 # add new b loss
                 b_tilde_star = self.gen_real(tf.concat([b_tilde_noisy, b1], axis=1), training=True)
                 
                 attr_cycle_loss_b_star += self.supervised_loss(b1, b_tilde_star)
                 gen_real_loss += self.generator_loss(self.disc_real(b_tilde_star))
+                disc_real_loss += self.discriminator_loss(self.disc_real(b1), self.disc_real(b_tilde_star))
 
 
             # weight L(f(a, b1)=b3)
