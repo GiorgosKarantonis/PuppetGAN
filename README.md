@@ -27,7 +27,7 @@ PuppetGAN consists of 4 different components; one that is responsible for learni
 
 * The original architecture performs the disentanglement only in the synthetic domain and this ability is passed to the real domain through implicitly. *The disentanglement *Roid* takes advantage of the CycleGAN model and performs the disentanglement in the translations of the synthetic images passing the ability explicitly to the real domain.*
 
-* The attribute cycle *Roids* act in a similar way, but they instead force the attributes, other that the *Attribute of Interest*, of the cross-domain translations to be as precise as possible.
+* The attribute cycle *Roids* act in a similar way, but they instead force the attributes, other that the *Attribute of Interest*, of the cross-domain translations to be as precise as possible. This can be seen as a more strict version of the disentanglement *Roid* as well.
 
 <p align="center">
   <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/roid_dis.png" width="25%">
@@ -60,12 +60,11 @@ Just like in the original paper, all the reported score are for the MNIST datase
 
 |PuppetGAN|Accuracy|<img src="https://render.githubusercontent.com/render/math?math=\bf{r_{attr}}">|<img src="https://render.githubusercontent.com/render/math?math=\bf{V_{rest}}">|Epoch|
 |:----------------------------------------:|:----------------:|:----------:|:------:|:-------:|
-| *Original (paper)*                       |      *0.97*      |   *0.40*   | *0.01* |   *-*   |
+| *Original (paper)*                       |    ***0.97***    |   *0.40*   | *0.01* |   *-*   |
 | My Baseline                              |       0.96       |    0.59    |  0.01  |   300   |
-| **Roids in Attribute Cycle Component**   |       0.96       |  **0.84**  |  0.02  | **100** |
-| **Roids in Attribute Cycle Component**   |     **0.98**     |    0.77    |  0.02  |   150   |
+| **Roids in Attribute Cycle Component**   |     **0.97**     |  **0.82**  |  0.02  | **100** |
 | Roids in Disentanglement Component       |       0.91       |    0.73    |  0.01  |   250   |
-| **Roids in Both Components**             |       0.97       |  **0.79**  |  0.01  |   300   |
+| **Roids in Both Components**             |     **0.97**     |  **0.79**  |  0.01  |   300   |
 
 * **Accuracy** *(The closer to 1 the better)*
 
@@ -98,20 +97,19 @@ score as the original model while **increasing the manipulation score by** more 
   <em>MNIST rotation after adding Roids on the Attribute Cycle component</em>
 </p>
 
-For now, I would personally favor the model that uses only the *Roids* of the Attribute Cycle component due to the fact that it manages to outperform every other model in the *AoI* manipulation score **at 1/3 of the time**, while having insignificant differences in the values of the other metrics.
+For now, I would personally favor the model that uses only the *Roids* of the Attribute Cycle component due to the fact that it manages to outperform every other model in the *AoI* manipulation score **at 1/3 of the time**, while having an insignificant difference in the value of <img src="https://render.githubusercontent.com/render/math?math=\bf{V_{rest}}">. As an extra trick, I found that not updating the discriminator in the Attribute Cycle *Roids* could improve the performance slightly, but that's just an additional hack.
 
 **Each *Roid* implicitly affects the weight of its respective loss due to the fact that extra terms are added to it.** In order to ensure that the performance boost is not caused by the increased loss weight, I am providing a comparison between the performance of the model with the *Roids* in the Attribute Cycle component and the *Baseline* model with twice the weights of the Attribute Cycle Component.
 
 |PuppetGAN|Accuracy|<img src="https://render.githubusercontent.com/render/math?math=\bf{r_{attr}}">|<img src="https://render.githubusercontent.com/render/math?math=\bf{V_{rest}}">|Epoch|
 |:----------------------------------------:|:----------------:|:----------:|:------:|:-------:|
-| *Original (paper)*                       |      *0.97*      |   *0.40*   | *0.01* |   *-*   |
+| *Original (paper)*                       |    ***0.97***    |   *0.40*   | *0.01* |   *-*   |
 | My Baseline                              |       0.96       |    0.59    |  0.01  |   300   |
 | Weighted Baseline                        |       0.84       |  **0.85**  |  0.01  |   100   |
 | Weighted Baseline                        |       0.93       |    0.72    |  0.01  |   150   |
 | Weighted Baseline                        |       0.92       |    0.68    |  0.01  |   200   |
 | Weighted Baseline                        |       0.95       |    0.63    |  0.01  |   300   |
-| **Roids in Attribute Cycle Component**   |       0.96       |  **0.84**  |  0.02  | **100** |
-| **Roids in Attribute Cycle Component**   |     **0.98**     |    0.77    |  0.02  |   150   |
+| **Roids in Attribute Cycle Component**   |     **0.97**     |  **0.82**  |  0.02  | **100** |
 
 The above results show that increasing the weights of the Attribute Cycle losses can slightly increase the performance of PuppetGAN, but such a model would be comparable to the *Baseline* and not to the model that utilizes the *Roids*.
 
