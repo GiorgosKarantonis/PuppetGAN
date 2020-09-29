@@ -7,7 +7,7 @@
 
 ## Introduction
 
-This repo contains a tensorflow implementation of [PuppetGAN](https://openaccess.thecvf.com/content_ICCV_2019/papers/Usman_PuppetGAN_Cross-Domain_Image_Manipulation_by_Demonstration_ICCV_2019_paper.pdf) as well as **an improved version of it, capable of manipulating features up to 100% better and up to 300% faster!** 😎
+This repo contains a TensorFlow implementation of [PuppetGAN](https://openaccess.thecvf.com/content_ICCV_2019/papers/Usman_PuppetGAN_Cross-Domain_Image_Manipulation_by_Demonstration_ICCV_2019_paper.pdf) as well as **an improved version of it, capable of manipulating features up to 100% better and up to 300% faster!** 😎
 
 **PuppetGAN is** model that extends the CycleGAN idea and is **capable of extracting and manipulating features from a domain using examples from a different domain**. On top of that, one amazing aspect of PuppetGAN is that it **does not require a great amount of data**; the biggest dataset I used contained 5000 sets of examples while the smallest one **just slightly over 1000 sets of examples**!
 
@@ -23,7 +23,7 @@ PuppetGAN consists of 4 different components; one that is responsible for learni
   <em>The full architecture of the baseline PuppetGAN (the image is copied from the original paper)</em>
 </p>
 
-**With this repo I add a few more components, which I call Roids, that greatly improve the performance of the baseline PuppetGAN**. One *Roid* is applied in the *disentanglement* part and the rest in the *attribute cycle* part while **the objective of all of them is pretty much the same; to guarantee better disentanglement!**
+**With this repo I add a few more components, which I call Roids, that greatly improve the performance of the *Baseline* PuppetGAN**. One *Roid* is applied in the *disentanglement* part and the rest in the *attribute cycle* part while **the objective of all of them is pretty much the same; to guarantee better disentanglement!**
 
 * The original architecture performs the disentanglement only in the synthetic domain and this ability is passed to the real domain through implicitly. *The disentanglement *Roid* takes advantage of the CycleGAN model and performs the disentanglement in the translations of the synthetic images passing the ability explicitly to the real domain.*
 
@@ -41,13 +41,13 @@ PuppetGAN consists of 4 different components; one that is responsible for learni
 
 ### Implementation
 
-The only difference between my baseline and the model from the paper is that my generators and discriminators are modified versions of the ones used in tensorflow's [CycleGAN tutorial](https://www.tensorflow.org/tutorials/generative/cyclegan). The fact that the creators of PuppetGAN used ResNet blocks may be partially responsible for the memorization effect that seems to be present in some of the results of the paper since the skip connections can allow information to be passed unchanged between different layers.
+The only difference between my *Baseline* and the model from the paper is that my generators and discriminators are modified versions of the ones used in TensorFlow's [CycleGAN tutorial](https://www.tensorflow.org/tutorials/generative/cyclegan). The fact that the creators of PuppetGAN used ResNet blocks may be partially responsible for the memorization effect that seems to be present in some of the results of the paper since the skip connections can allow information to be passed unchanged between different layers.
 
 **Other than that, all my implementations use exactly the same parameters as the ones in the original model. Also, neither my architectures nor the parameters have been modified at all between different datasets.**
 
 ## Performance
 
-**Both my baseline implementation and my proposed architecture(s) significantly outperform the original PuppetGAN!**
+**Both my *Baseline* implementation and my proposed architecture(s) significantly outperform the original PuppetGAN!**
 
 <p align="center">
   <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mnist_baseline.gif" width="100%">
@@ -61,7 +61,7 @@ Just like in the original paper, all the reported score are for the MNIST datase
 |PuppetGAN|Accuracy|<img src="https://render.githubusercontent.com/render/math?math=\bf{r_{attr}}">|<img src="https://render.githubusercontent.com/render/math?math=\bf{V_{rest}}">|Epoch|
 |:----------------------------------------:|:----------------:|:----------:|:------:|:-------:|
 | *Original (paper)*                       |      *0.97*      |   *0.40*   | *0.01* |   *-*   |
-| My baseline                              |       0.96       |    0.59    |  0.01  |   300   |
+| My Baseline                              |       0.96       |    0.59    |  0.01  |   300   |
 | **Roids in Attribute Cycle Component**   |       0.96       |  **0.84**  |  0.02  | **100** |
 | **Roids in Attribute Cycle Component**   |     **0.98**     |    0.77    |  0.02  |   150   |
 | Roids in Disentanglement Component       |       0.91       |    0.73    |  0.01  |   250   |
@@ -91,14 +91,31 @@ This score captures how similar are the results between images that have identic
 
 The most well balanced model seems to be one that uses both kinds of *Roids*, since it achieves the same *accuracy* and 
 <img src="https://render.githubusercontent.com/render/math?math=\textit{V_{rest}}"> 
-score as the original model while **increasing the manipulation score by** more than 30% compared to my baseline implementation and almost **100% compared to the original paper**. Nevertheless, although it is intuitive that a combination of all the *Roids* would yield better results, I believe that more experiments are required to determine if its benefits are sufficient to outweigh the great speed up of the model that uses *Roids* only in the Attribute Cycle component.
+score as the original model while **increasing the manipulation score by** more than 30% compared to my *Baseline* implementation and almost **100% compared to the original paper**. Nevertheless, although it is intuitive that a combination of all the *Roids* would yield better results, I believe that more experiments are required to determine if its benefits are sufficient to outweigh the great speed up of the model that uses *Roids* only in the Attribute Cycle component.
 
 <p align="center">
   <img src="https://github.com/GiorgosKarantonis/images/blob/master/PuppetGAN/mnist_roids.gif" width="100%">
   <em>MNIST rotation after adding Roids on the Attribute Cycle component</em>
 </p>
 
-For now, I would personally favor the model that uses only the *Roids* of the Attribute Cycle component due to the fact that it manages to outperform every other model in the *AoI* manipulation score **at the 1/3 of the time**, while having insignificant differences in the values of the other metrics.
+For now, I would personally favor the model that uses only the *Roids* of the Attribute Cycle component due to the fact that it manages to outperform every other model in the *AoI* manipulation score **at 1/3 of the time**, while having insignificant differences in the values of the other metrics.
+
+**Each *Roid* implicitly affects the weight of its respective loss due to the fact that extra terms are added to it.** In order to ensure that the performance boost is not caused by the increased loss weight I am providing a comparison between the performance of the model with the *Roids* in the Attribute Cycle component and the *Baseline* model with twice the weights of the Attribute Cycle Component.
+
+|PuppetGAN|Accuracy|<img src="https://render.githubusercontent.com/render/math?math=\bf{r_{attr}}">|<img src="https://render.githubusercontent.com/render/math?math=\bf{V_{rest}}">|Epoch|
+|:----------------------------------------:|:----------------:|:----------:|:------:|:-------:|
+| *Original (paper)*                       |      *0.97*      |   *0.40*   | *0.01* |   *-*   |
+| My Baseline                              |       0.96       |    0.59    |  0.01  |   300   |
+| Weighted Baseline                        |       0.84       |  **0.85**  |  0.01  |   100   |
+| Weighted Baseline                        |       0.93       |    0.72    |  0.01  |   150   |
+| Weighted Baseline                        |       0.92       |    0.68    |  0.01  |   200   |
+| Weighted Baseline                        |       0.95       |    0.63    |  0.01  |   300   |
+| **Roids in Attribute Cycle Component**   |       0.96       |  **0.84**  |  0.02  | **100** |
+| **Roids in Attribute Cycle Component**   |     **0.98**     |    0.77    |  0.02  |   150   |
+
+The above results show that increasing the weights of the Attribute Cycle losses can slightly increase the performance of PuppetGAN, but such a model would be comparable to the *Baseline* and not to the model that utilizes the *Roids*.
+
+### Comparison to the original results
 
 A significant drawback of the original model is that seems to memorizes seen images instead of editing the given ones. This can be observed in the rotation results reported in the [paper](https://openaccess.thecvf.com/content_ICCV_2019/papers/Usman_PuppetGAN_Cross-Domain_Image_Manipulation_by_Demonstration_ICCV_2019_paper.pdf) where the representation of a real digit may change during the rotation or different representations of a real digit may have the same rotated representations. This doesn't stop it though from having a very high accuracy, which highlights why this metric is not necessarily ideal for calculating the quality of the disentanglement.
 
@@ -108,7 +125,7 @@ A significant drawback of the original model is that seems to memorizes seen ima
   <em>The rotation results of the paper</em>
 </p>
 
-Another issue with both the model of the paper and my models can be observed in the mouth dataset, where PuppetGAN confuses the microphone with the opening of the mouth; when the synthetic image dictates a wider opening, PuppetGAN moves the microphone closer to the mouth. This effect is slightly bigger in my baseline but I believe that it is due to the fact that I haven't done any hyper-parameter tuning; some experimentation with the magnitude of the noise or with the weights of the different components could eliminate it. Also, the model with *Roids* in the *Attribute of Interest* seems to deal with issue better than the baseline.
+Another issue with both the model of the paper and my models can be observed in the mouth dataset, where PuppetGAN confuses the microphone with the opening of the mouth; when the synthetic image dictates a wider opening, PuppetGAN moves the microphone closer to the mouth. This effect is slightly bigger in my *Baseline* but I believe that it is due to the fact that I haven't done any hyper-parameter tuning; some experimentation with the magnitude of the noise or with the weights of the different components could eliminate it. Also, the model with *Roids* in the *Attribute of Interest* seems to deal with issue better than the *Baseline*.
 
 ## Running the Code
 
