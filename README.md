@@ -65,7 +65,7 @@ Just like in the original paper, all the reported score are for the MNIST datase
 | My Baseline                              |       0.96       |    0.59    |  0.01  |   300   |
 | **Roids in Attribute Cycle Component**   |     **0.97**     |  **0.82**  |  0.02  | **100** |
 | Roids in Disentanglement Component       |       0.91       |    0.73    |  0.01  |   250   |
-| **Roids in Both Components**             |     **0.97**     |  **0.79**  |  0.01  |   300   |
+| **Roids in Both Components**             |     **0.97**     |    0.79    |  0.01  |   300   |
 
 * **Accuracy** *(The closer to 1 the better)*
 
