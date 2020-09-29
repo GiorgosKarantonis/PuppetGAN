@@ -100,7 +100,7 @@ score as the original model while **increasing the manipulation score by** more 
 
 For now, I would personally favor the model that uses only the *Roids* of the Attribute Cycle component due to the fact that it manages to outperform every other model in the *AoI* manipulation score **at 1/3 of the time**, while having insignificant differences in the values of the other metrics.
 
-**Each *Roid* implicitly affects the weight of its respective loss due to the fact that extra terms are added to it.** In order to ensure that the performance boost is not caused by the increased loss weight I am providing a comparison between the performance of the model with the *Roids* in the Attribute Cycle component and the *Baseline* model with twice the weights of the Attribute Cycle Component.
+**Each *Roid* implicitly affects the weight of its respective loss due to the fact that extra terms are added to it.** In order to ensure that the performance boost is not caused by the increased loss weight, I am providing a comparison between the performance of the model with the *Roids* in the Attribute Cycle component and the *Baseline* model with twice the weights of the Attribute Cycle Component.
 
 |PuppetGAN|Accuracy|<img src="https://render.githubusercontent.com/render/math?math=\bf{r_{attr}}">|<img src="https://render.githubusercontent.com/render/math?math=\bf{V_{rest}}">|Epoch|
 |:----------------------------------------:|:----------------:|:----------:|:------:|:-------:|
