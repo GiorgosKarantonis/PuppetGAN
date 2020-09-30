@@ -57,7 +57,7 @@ The only difference between my *Baseline* and the model from the paper is that m
 
 ### By the Numbers
 
-Just like in the original paper, all the reported score are for the MNIST dataset. Due to the fact that I didn't have access to the *size* dataset, I was able to measure the performance of my models only in the *rotation* dataset.
+Just like in the original paper, all the reported scores are for the MNIST dataset. Due to the fact that I didn't have access to the *size* dataset, I was able to measure the performance of my models only in the *rotation* dataset.
 
 |PuppetGAN|Accuracy|<img src="https://render.githubusercontent.com/render/math?math=\bf{r_{attr}}">|<img src="https://render.githubusercontent.com/render/math?math=\bf{V_{rest}}">|Epoch|
 |:----------------------------------------:|:----------------:|:----------:|:------:|:-------:|
