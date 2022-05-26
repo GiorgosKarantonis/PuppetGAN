@@ -6,7 +6,7 @@ verify_ssl = true
 [dev-packages]
 
 [packages]
-tensorflow = "==2.0.3"
+tensorflow = "==2.7.2"
 numpy = "==1.18.5"
 scipy = "==1.5.2"
 matplotlib = "==3.3.0"
